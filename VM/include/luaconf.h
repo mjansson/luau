@@ -47,7 +47,7 @@
 #endif
 
 /* Can be used to reconfigure internal error handling to use longjmp instead of C++ EH */
-#define LUA_USE_LONGJMP 0
+#define LUA_USE_LONGJMP 1
 
 /* LUA_IDSIZE gives the maximum size for the description of the source */
 #define LUA_IDSIZE 256

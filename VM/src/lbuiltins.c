@@ -13,6 +13,7 @@
 
 #ifdef _MSC_VER
 #include <intrin.h>
+#pragma warning(disable : 4100)
 #endif
 
 // luauF functions implement FASTCALL instruction that performs a direct execution of some builtin functions from the VM
@@ -192,7 +193,7 @@ static int luauF_frexp(lua_State* L, StkId res, TValue* arg0, int nresults, StkI
         int e;
         double f = frexp(a1, &e);
         setnvalue(res, f);
-        setnvalue(res + 1, double(e));
+        setnvalue(res + 1, (double)(e));
         return 2;
     }
 
@@ -205,7 +206,7 @@ static int luauF_ldexp(lua_State* L, StkId res, TValue* arg0, int nresults, StkI
     {
         double a1 = nvalue(arg0);
         double a2 = nvalue(args);
-        setnvalue(res, ldexp(a1, int(a2)));
+        setnvalue(res, ldexp(a1, (int)(a2)));
         return 1;
     }
 
@@ -418,17 +419,17 @@ static int luauF_arshift(lua_State* L, StkId res, TValue* arg0, int nresults, St
 
         unsigned u;
         luai_num2unsigned(u, a1);
-        int s = int(a2);
+        int s = (int)(a2);
 
         // note: we only specialize fast-path that doesn't require further conditionals (negative shifts and shifts greater or equal to bit width can
         // be handled generically)
-        if (unsigned(s) < 32)
+        if ((unsigned)(s) < 32)
         {
             // note: technically right shift of negative values is UB, but this behavior is getting defined in C++20 and all compilers do the right
             // (shift) thing.
-            uint32_t r = int32_t(u) >> s;
+            uint32_t r = (int32_t)(u) >> s;
 
-            setnvalue(res, double(r));
+            setnvalue(res, (double)(r));
             return 1;
         }
     }
@@ -465,7 +466,7 @@ static int luauF_band(lua_State* L, StkId res, TValue* arg0, int nresults, StkId
             r &= u;
         }
 
-        setnvalue(res, double(r));
+        setnvalue(res, (double)(r));
         return 1;
     }
 
@@ -482,7 +483,7 @@ static int luauF_bnot(lua_State* L, StkId res, TValue* arg0, int nresults, StkId
 
         uint32_t r = ~u;
 
-        setnvalue(res, double(r));
+        setnvalue(res, (double)(r));
         return 1;
     }
 
@@ -518,7 +519,7 @@ static int luauF_bor(lua_State* L, StkId res, TValue* arg0, int nresults, StkId 
             r |= u;
         }
 
-        setnvalue(res, double(r));
+        setnvalue(res, (double)(r));
         return 1;
     }
 
@@ -554,7 +555,7 @@ static int luauF_bxor(lua_State* L, StkId res, TValue* arg0, int nresults, StkId
             r ^= u;
         }
 
-        setnvalue(res, double(r));
+        setnvalue(res, (double)(r));
         return 1;
     }
 
@@ -607,15 +608,15 @@ static int luauF_extract(lua_State* L, StkId res, TValue* arg0, int nresults, St
 
         unsigned n;
         luai_num2unsigned(n, a1);
-        int f = int(a2);
-        int w = int(a3);
+        int f = (int)(a2);
+        int w = (int)(a3);
 
         if (f >= 0 && w > 0 && f + w <= 32)
         {
             uint32_t m = ~(0xfffffffeu << (w - 1));
             uint32_t r = (n >> f) & m;
 
-            setnvalue(res, double(r));
+            setnvalue(res, (double)(r));
             return 1;
         }
     }
@@ -632,7 +633,7 @@ static int luauF_lrotate(lua_State* L, StkId res, TValue* arg0, int nresults, St
 
         unsigned u;
         luai_num2unsigned(u, a1);
-        int s = int(a2);
+        int s = (int)(a2);
 
         // MSVC doesn't recognize the rotate form that is UB-safe
 #ifdef _MSC_VER
@@ -641,7 +642,7 @@ static int luauF_lrotate(lua_State* L, StkId res, TValue* arg0, int nresults, St
         uint32_t r = (u << (s & 31)) | (u >> ((32 - s) & 31));
 #endif
 
-        setnvalue(res, double(r));
+        setnvalue(res, (double)(r));
         return 1;
     }
 
@@ -657,15 +658,15 @@ static int luauF_lshift(lua_State* L, StkId res, TValue* arg0, int nresults, Stk
 
         unsigned u;
         luai_num2unsigned(u, a1);
-        int s = int(a2);
+        int s = (int)(a2);
 
         // note: we only specialize fast-path that doesn't require further conditionals (negative shifts and shifts greater or equal to bit width can
         // be handled generically)
-        if (unsigned(s) < 32)
+        if ((unsigned)(s) < 32)
         {
             uint32_t r = u << s;
 
-            setnvalue(res, double(r));
+            setnvalue(res, (double)(r));
             return 1;
         }
     }
@@ -685,15 +686,15 @@ static int luauF_replace(lua_State* L, StkId res, TValue* arg0, int nresults, St
         unsigned n, v;
         luai_num2unsigned(n, a1);
         luai_num2unsigned(v, a2);
-        int f = int(a3);
-        int w = int(a4);
+        int f = (int)(a3);
+        int w = (int)(a4);
 
         if (f >= 0 && w > 0 && f + w <= 32)
         {
             uint32_t m = ~(0xfffffffeu << (w - 1));
             uint32_t r = (n & ~(m << f)) | ((v & m) << f);
 
-            setnvalue(res, double(r));
+            setnvalue(res, (double)(r));
             return 1;
         }
     }
@@ -710,7 +711,7 @@ static int luauF_rrotate(lua_State* L, StkId res, TValue* arg0, int nresults, St
 
         unsigned u;
         luai_num2unsigned(u, a1);
-        int s = int(a2);
+        int s = (int)(a2);
 
         // MSVC doesn't recognize the rotate form that is UB-safe
 #ifdef _MSC_VER
@@ -719,7 +720,7 @@ static int luauF_rrotate(lua_State* L, StkId res, TValue* arg0, int nresults, St
         uint32_t r = (u >> (s & 31)) | (u << ((32 - s) & 31));
 #endif
 
-        setnvalue(res, double(r));
+        setnvalue(res, (double)(r));
         return 1;
     }
 
@@ -735,15 +736,15 @@ static int luauF_rshift(lua_State* L, StkId res, TValue* arg0, int nresults, Stk
 
         unsigned u;
         luai_num2unsigned(u, a1);
-        int s = int(a2);
+        int s = (int)(a2);
 
         // note: we only specialize fast-path that doesn't require further conditionals (negative shifts and shifts greater or equal to bit width can
         // be handled generically)
-        if (unsigned(s) < 32)
+        if ((unsigned)(s) < 32)
         {
             uint32_t r = u >> s;
 
-            setnvalue(res, double(r));
+            setnvalue(res, (double)(r));
             return 1;
         }
     }
@@ -770,10 +771,10 @@ static int luauF_byte(lua_State* L, StkId res, TValue* arg0, int nresults, StkId
     if (nparams >= 2 && ttisstring(arg0) && ttisnumber(args))
     {
         TString* ts = tsvalue(arg0);
-        int i = int(nvalue(args));
-        int j = (nparams >= 3) ? (ttisnumber(args + 1) ? int(nvalue(args + 1)) : 0) : i;
+        int i = (int)(nvalue(args));
+        int j = (nparams >= 3) ? (ttisnumber(args + 1) ? (int)(nvalue(args + 1)) : 0) : i;
 
-        if (i >= 1 && j >= i && j <= int(ts->len))
+        if (i >= 1 && j >= i && j <= (int)(ts->len))
         {
             int c = j - i + 1;
             const char* s = getstr(ts);
@@ -784,7 +785,7 @@ static int luauF_byte(lua_State* L, StkId res, TValue* arg0, int nresults, StkId
             {
                 for (int k = 0; k < c; ++k)
                 {
-                    setnvalue(res + k, uint8_t(s[i + k - 1]));
+                    setnvalue(res + k, (uint8_t)(s[i + k - 1]));
                 }
 
                 return c;
@@ -799,7 +800,7 @@ static int luauF_char(lua_State* L, StkId res, TValue* arg0, int nresults, StkId
 {
     char buffer[8];
 
-    if (nparams < int(sizeof(buffer)) && nresults <= 1)
+    if (nparams < (int)(sizeof(buffer)) && nresults <= 1)
     {
 
         if (nparams >= 1)
@@ -807,12 +808,12 @@ static int luauF_char(lua_State* L, StkId res, TValue* arg0, int nresults, StkId
             if (!ttisnumber(arg0))
                 return -1;
 
-            int ch = int(nvalue(arg0));
+            int ch = (int)(nvalue(arg0));
 
             if ((unsigned char)(ch) != ch)
                 return -1;
 
-            buffer[0] = ch;
+            buffer[0] = (char)ch;
         }
 
         for (int i = 2; i <= nparams; ++i)
@@ -820,12 +821,12 @@ static int luauF_char(lua_State* L, StkId res, TValue* arg0, int nresults, StkId
             if (!ttisnumber(args + (i - 2)))
                 return -1;
 
-            int ch = int(nvalue(args + (i - 2)));
+            int ch = (int)(nvalue(args + (i - 2)));
 
             if ((unsigned char)(ch) != ch)
                 return -1;
 
-            buffer[i - 1] = ch;
+            buffer[i - 1] = (char)ch;
         }
 
         buffer[nparams] = 0;
@@ -843,7 +844,7 @@ static int luauF_len(lua_State* L, StkId res, TValue* arg0, int nresults, StkId 
     {
         TString* ts = tsvalue(arg0);
 
-        setnvalue(res, int(ts->len));
+        setnvalue(res, (int)(ts->len));
         return 1;
     }
 
@@ -868,10 +869,10 @@ static int luauF_sub(lua_State* L, StkId res, TValue* arg0, int nresults, StkId 
     if (nparams >= 3 && nresults <= 1 && ttisstring(arg0) && ttisnumber(args) && ttisnumber(args + 1))
     {
         TString* ts = tsvalue(arg0);
-        int i = int(nvalue(args));
-        int j = int(nvalue(args + 1));
+        int i = (int)(nvalue(args));
+        int j = (int)(nvalue(args + 1));
 
-        if (i >= 1 && j >= i && unsigned(j - 1) < unsigned(ts->len))
+        if (i >= 1 && j >= i && (unsigned)(j - 1) < (unsigned)(ts->len))
         {
             setsvalue2s(L, res, luaS_newlstr(L, getstr(ts) + (i - 1), j - i + 1));
             return 1;
@@ -1000,7 +1001,7 @@ static int luauF_tunpack(lua_State* L, StkId res, TValue* arg0, int nresults, St
         if (nparams == 1)
             n = luaH_getn(t);
         else if (nparams == 3 && ttisnumber(args) && ttisnumber(args + 1) && nvalue(args) == 1.0)
-            n = int(nvalue(args + 1));
+            n = (int)(nvalue(args + 1));
 
         if (n >= 0 && n <= t->sizearray && cast_int(L->stack_last - res) >= n)
         {
@@ -1023,7 +1024,7 @@ static int luauF_vector(lua_State* L, StkId res, TValue* arg0, int nresults, Stk
         double y = nvalue(args);
         double z = nvalue(args + 1);
 
-        setvvalue(res, float(x), float(y), float(z));
+        setvvalue(res, (float)(x), (float)(y), (float)(z));
         return 1;
     }
 

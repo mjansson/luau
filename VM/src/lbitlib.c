@@ -5,7 +5,7 @@
 #include "lnumutils.h"
 
 #define ALLONES ~0u
-#define NBITS int(8 * sizeof(unsigned))
+#define NBITS ((int)(8 * sizeof(unsigned)))
 
 /* macro to trim extra bits */
 #define trim(x) ((x)&ALLONES)

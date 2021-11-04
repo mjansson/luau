@@ -16,12 +16,12 @@
 #define luai_numlt(a, b) ((a) < (b))
 #define luai_numle(a, b) ((a) <= (b))
 
-inline bool luai_veceq(const float* a, const float* b)
+inline int luai_veceq(const float* a, const float* b)
 {
     return a[0] == b[0] && a[1] == b[1] && a[2] == b[2];
 }
 
-inline bool luai_vecisnan(const float* a)
+inline int luai_vecisnan(const float* a)
 {
     return a[0] != a[0] || a[1] != a[1] || a[2] != a[2];
 }

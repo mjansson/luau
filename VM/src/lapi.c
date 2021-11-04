@@ -12,8 +12,10 @@
 #include "lnumutils.h"
 
 #include <string.h>
+#include <stdint.h>
 
-LUAU_FASTFLAG(LuauGcFullSkipInactiveThreads)
+/* TODO: C++
+LUAU_FASTFLAG(LuauGcFullSkipInactiveThreads)*/
 
 const char* lua_ident = "$Lua: Lua 5.1.4 Copyright (C) 1994-2008 Lua.org, PUC-Rio $\n"
                         "$Authors: R. Ierusalimschy, L. H. de Figueiredo & W. Celes $\n"
@@ -262,6 +264,7 @@ int lua_type(lua_State* L, int idx)
 
 const char* lua_typename(lua_State* L, int t)
 {
+    (void)sizeof(L);
     return (t == LUA_TNONE) ? "no value" : luaT_typenames[t];
 }
 
@@ -595,7 +598,12 @@ const char* lua_pushfstringL(lua_State* L, const char* fmt, ...)
     return ret;
 }
 
-void lua_pushcfunction(lua_State* L, lua_CFunction fn, const char* debugname, int nup, lua_Continuation cont)
+void lua_pushcfunction(lua_State* L, lua_CFunction fn)
+{
+    lua_pushcfunction_full(L, fn, 0, 0, 0);
+}
+
+void lua_pushcfunction_full(lua_State* L, lua_CFunction fn, const char* debugname, int nup, lua_Continuation cont)
 {
     luaC_checkGC(L);
     luaC_checkthreadsleep(L);
@@ -700,12 +708,12 @@ void lua_createtable(lua_State* L, int narray, int nrec)
     return;
 }
 
-void lua_setreadonly(lua_State* L, int objindex, bool value)
+void lua_setreadonly(lua_State* L, int objindex, int value)
 {
     const TValue* o = index2adr(L, objindex);
     api_check(L, ttistable(o));
     Table* t = hvalue(o);
-    t->readonly = value;
+    t->readonly = (uint8_t)value;
     return;
 }
 
@@ -718,12 +726,12 @@ int lua_getreadonly(lua_State* L, int objindex)
     return res;
 }
 
-void lua_setsafeenv(lua_State* L, int objindex, bool value)
+void lua_setsafeenv(lua_State* L, int objindex, int value)
 {
     const TValue* o = index2adr(L, objindex);
     api_check(L, ttistable(o));
     Table* t = hvalue(o);
-    t->safeenv = value;
+    t->safeenv = (uint8_t)value;
     return;
 }
 
@@ -1037,14 +1045,14 @@ int lua_gc(lua_State* L, int what, int data)
         else
             g->GCthreshold = 0;
 
-        bool waspaused = g->gcstate == GCSpause;
+        int waspaused = g->gcstate == GCSpause;
 
         // track how much work the loop will actually perform
         size_t actualwork = 0;
 
         while (g->GCthreshold <= g->totalbytes)
         {
-            luaC_step(L, false);
+            luaC_step(L, 0);
 
             actualwork += g->gcstepsize;
 
@@ -1139,7 +1147,7 @@ void lua_concat(lua_State* L, int n)
 
 void* lua_newuserdata(lua_State* L, size_t sz, int tag)
 {
-    api_check(L, unsigned(tag) < LUA_UTAG_LIMIT);
+    api_check(L, (unsigned)tag < LUA_UTAG_LIMIT);
     luaC_checkGC(L);
     luaC_checkthreadsleep(L);
     Udata* u = luaS_newudata(L, sz, tag);
@@ -1217,7 +1225,7 @@ const char* lua_setupvalue(lua_State* L, int funcindex, int n)
 uintptr_t lua_encodepointer(lua_State* L, uintptr_t p)
 {
     global_State* g = L->global;
-    return uintptr_t((g->ptrenckey[0] * p + g->ptrenckey[2]) ^ (g->ptrenckey[1] * p + g->ptrenckey[3]));
+    return (uintptr_t)((g->ptrenckey[0] * p + g->ptrenckey[2]) ^ (g->ptrenckey[1] * p + g->ptrenckey[3]));
 }
 
 int lua_ref(lua_State* L, int idx)
@@ -1241,7 +1249,7 @@ int lua_ref(lua_State* L, int idx)
 
         TValue* slot = luaH_setnum(L, reg, ref);
         if (g->registryfree != 0)
-            g->registryfree = int(nvalue(slot));
+            g->registryfree = (int)(nvalue(slot));
         setobj2t(L, slot, p);
         luaC_barriert(L, reg, p);
     }
@@ -1263,7 +1271,7 @@ void lua_unref(lua_State* L, int ref)
 
 void lua_setuserdatadtor(lua_State* L, int tag, void (*dtor)(void*))
 {
-    api_check(L, unsigned(tag) < LUA_UTAG_LIMIT);
+    api_check(L, (unsigned)tag < LUA_UTAG_LIMIT);
     L->global->udatagc[tag] = dtor;
 }
 

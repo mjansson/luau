@@ -268,7 +268,7 @@ LUALIB_API void luaL_register(lua_State* L, const char* libname, const luaL_Reg*
     }
     for (; l->name; l++)
     {
-        lua_pushcfunction(L, l->func, l->name);
+        lua_pushcfunction_full(L, l->func, l->name, 0, 0);
         lua_setfield(L, -2, l->name);
     }
 }
@@ -331,7 +331,7 @@ LUALIB_API void luaL_buffinit(lua_State* L, luaL_Buffer* B)
     B->end = B->p + LUA_BUFFERSIZE;
 
     B->L = L;
-    B->storage = nullptr;
+    B->storage = 0;
 }
 
 LUALIB_API char* luaL_buffinitsize(lua_State* L, luaL_Buffer* B, size_t size)
@@ -374,13 +374,13 @@ LUALIB_API char* luaL_extendbuffer(luaL_Buffer* B, size_t additionalsize, int bo
 
 LUALIB_API void luaL_reservebuffer(luaL_Buffer* B, size_t size, int boxloc)
 {
-    if (size_t(B->end - B->p) < size)
+    if ((size_t)(B->end - B->p) < size)
         luaL_extendbuffer(B, size - (B->end - B->p), boxloc);
 }
 
 LUALIB_API void luaL_addlstring(luaL_Buffer* B, const char* s, size_t len)
 {
-    if (size_t(B->end - B->p) < len)
+    if ((size_t)(B->end - B->p) < len)
         luaL_extendbuffer(B, len - (B->end - B->p), -1);
 
     memcpy(B->p, s, len);
@@ -392,9 +392,10 @@ LUALIB_API void luaL_addvalue(luaL_Buffer* B)
     lua_State* L = B->L;
 
     size_t vl;
-    if (const char* s = lua_tolstring(L, -1, &vl))
+    const char* s = lua_tolstring(L, -1, &vl);
+    if (s)
     {
-        if (size_t(B->end - B->p) < vl)
+        if ((size_t)(B->end - B->p) < vl)
             luaL_extendbuffer(B, vl - (B->end - B->p), -2);
 
         memcpy(B->p, s, vl);
@@ -408,7 +409,8 @@ LUALIB_API void luaL_pushresult(luaL_Buffer* B)
 {
     lua_State* L = B->L;
 
-    if (TString* storage = B->storage)
+    TString* storage = B->storage;
+    if (storage)
     {
         luaC_checkGC(L);
 
@@ -468,7 +470,7 @@ LUALIB_API const char* luaL_tolstring(lua_State* L, int idx, size_t* len)
     default:
     {
         const void* ptr = lua_topointer(L, idx);
-        unsigned long long enc = lua_encodepointer(L, uintptr_t(ptr));
+        unsigned long long enc = lua_encodepointer(L, (uintptr_t)ptr);
         lua_pushfstring(L, "%s: 0x%016llx", luaL_typename(L, idx), enc);
         break;
     }

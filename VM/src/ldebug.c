@@ -16,6 +16,7 @@ static const char* getfuncname(Closure* f);
 
 static int currentpc(lua_State* L, CallInfo* ci)
 {
+    (void)sizeof(L);
     return pcRel(ci->savedpc, ci_func(ci)->l.p);
 }
 
@@ -31,7 +32,7 @@ static Proto* getluaproto(CallInfo* ci)
 
 int lua_getargument(lua_State* L, int level, int n)
 {
-    if (unsigned(level) >= unsigned(L->ci - L->base_ci))
+    if ((unsigned)(level) >= (unsigned)(L->ci - L->base_ci))
         return 0;
 
     CallInfo* ci = L->ci - level;
@@ -59,7 +60,7 @@ int lua_getargument(lua_State* L, int level, int n)
 
 const char* lua_getlocal(lua_State* L, int level, int n)
 {
-    if (unsigned(level) >= unsigned(L->ci - L->base_ci))
+    if ((unsigned)(level) >= (unsigned)(L->ci - L->base_ci))
         return 0;
 
     CallInfo* ci = L->ci - level;
@@ -76,7 +77,7 @@ const char* lua_getlocal(lua_State* L, int level, int n)
 
 const char* lua_setlocal(lua_State* L, int level, int n)
 {
-    if (unsigned(level) >= unsigned(L->ci - L->base_ci))
+    if ((unsigned)(level) >= (unsigned)(L->ci - L->base_ci))
         return 0;
 
     CallInfo* ci = L->ci - level;
@@ -167,7 +168,7 @@ int lua_getinfo(lua_State* L, int level, const char* what, lua_Debug* ar)
         api_check(L, ttisfunction(func));
         f = clvalue(func);
     }
-    else if (unsigned(level) < unsigned(L->ci - L->base_ci))
+    else if ((unsigned)(level) < (unsigned)(L->ci - L->base_ci))
     {
         ci = L->ci - level;
         LUAU_ASSERT(ttisfunction(ci->func));
@@ -204,7 +205,7 @@ static const char* getfuncname(Closure* cl)
             return getstr(p->debugname);
         }
     }
-    return nullptr;
+    return 0;
 }
 
 l_noret luaG_typeerrorL(lua_State* L, const TValue* o, const char* op)
@@ -295,7 +296,7 @@ void luaG_pusherror(lua_State* L, const char* error)
     pusherror(L, error);
 }
 
-void luaG_breakpoint(lua_State* L, Proto* p, int line, bool enable)
+void luaG_breakpoint(lua_State* L, Proto* p, int line, int enable)
 {
     if (p->lineinfo)
     {
@@ -336,13 +337,13 @@ void luaG_breakpoint(lua_State* L, Proto* p, int line, bool enable)
     }
 }
 
-bool luaG_onbreak(lua_State* L)
+int luaG_onbreak(lua_State* L)
 {
     if (L->ci == L->base_ci)
-        return false;
+        return 0;
 
     if (!isLua(L->ci))
-        return false;
+        return 0;
 
     return LUAU_INSN_OP(*L->ci->savedpc) == LOP_BREAK;
 }
@@ -357,12 +358,12 @@ int luaG_getline(Proto* p, int pc)
     return p->abslineinfo[pc >> p->linegaplog2] + p->lineinfo[pc];
 }
 
-void lua_singlestep(lua_State* L, bool singlestep)
+void lua_singlestep(lua_State* L, int singlestep)
 {
     L->singlestep = singlestep;
 }
 
-void lua_breakpoint(lua_State* L, int funcindex, int line, bool enable)
+void lua_breakpoint(lua_State* L, int funcindex, int line, int enable)
 {
     const TValue* func = luaA_toobject(L, funcindex);
     api_check(L, ttisfunction(func) && !clvalue(func)->isC);
@@ -385,7 +386,7 @@ const char* lua_debugtrace(lua_State* L)
     const int limit1 = 10;
     const int limit2 = 10;
 
-    int depth = int(L->ci - L->base_ci);
+    int depth = (int)(L->ci - L->base_ci);
     size_t offset = 0;
 
     lua_Debug ar;
@@ -397,7 +398,11 @@ const char* lua_debugtrace(lua_State* L)
         if (ar.currentline > 0)
         {
             char line[32];
+#ifdef _MSC_VER
+            sprintf_s(line, sizeof(line), ":%d", ar.currentline);
+#else
             sprintf(line, ":%d", ar.currentline);
+#endif
 
             offset = append(buf, sizeof(buf), offset, line);
         }
@@ -413,7 +418,11 @@ const char* lua_debugtrace(lua_State* L)
         if (depth > limit1 + limit2 && level == limit1 - 1)
         {
             char skip[32];
-            sprintf(skip, "... (+%d frames)\n", int(depth - limit1 - limit2));
+#ifdef _MSC_VER
+            sprintf_s(skip, sizeof(skip), "... (+%d frames)\n", (int)(depth - limit1 - limit2));
+#else
+            sprintf(skip, "... (+%d frames)\n", (int)(depth - limit1 - limit2));
+#endif
 
             offset = append(buf, sizeof(buf), offset, skip);
 

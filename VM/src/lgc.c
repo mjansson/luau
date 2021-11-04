@@ -12,11 +12,12 @@
 #include <string.h>
 #include <stdio.h>
 
+/* TODO: C++
 LUAU_FASTFLAGVARIABLE(LuauRescanGrayAgain, false)
 LUAU_FASTFLAGVARIABLE(LuauRescanGrayAgainForwardBarrier, false)
 LUAU_FASTFLAGVARIABLE(LuauGcFullSkipInactiveThreads, false)
 LUAU_FASTFLAGVARIABLE(LuauShrinkWeakTables, false)
-LUAU_FASTFLAG(LuauArrayBoundary)
+LUAU_FASTFLAG(LuauArrayBoundary)*/
 
 #define GC_SWEEPMAX 40
 #define GC_SWEEPCOST 10
@@ -50,7 +51,7 @@ LUAU_FASTFLAG(LuauArrayBoundary)
             reallymarkobject(g, obj2gco(t)); \
     }
 
-static void recordGcStateTime(global_State* g, int startgcstate, double seconds, bool assist)
+static void recordGcStateTime(global_State* g, int startgcstate, double seconds, int assist)
 {
     switch (startgcstate)
     {
@@ -181,21 +182,22 @@ static int traversetable(global_State* g, Table* h)
     if (h->metatable)
         markobject(g, cast_to(Table*, h->metatable));
 
+    /* TODO: C++
     if (FFlag::LuauShrinkWeakTables)
     {
-        /* is there a weak mode? */
+        // is there a weak mode?
         if (const char* modev = gettablemode(g, h))
         {
             weakkey = (strchr(modev, 'k') != NULL);
             weakvalue = (strchr(modev, 'v') != NULL);
             if (weakkey || weakvalue)
-            {                         /* is really weak? */
-                h->gclist = g->weak;  /* must be cleared after GC, ... */
-                g->weak = obj2gco(h); /* ... so put in the appropriate list */
+            {                         // is really weak?
+                h->gclist = g->weak;  // must be cleared after GC, ...
+                g->weak = obj2gco(h); // ... so put in the appropriate list
             }
         }
     }
-    else
+    else */
     {
         const TValue* mode = gfasttm(g, h->metatable, TM_MODE);
         if (mode && ttisstring(mode))
@@ -287,15 +289,17 @@ static void traverseclosure(global_State* g, Closure* cl)
     }
 }
 
-static void traversestack(global_State* g, lua_State* l, bool clearstack)
+static void traversestack(global_State* g, lua_State* l, int clearstack)
 {
+    (void)sizeof(clearstack);
     markvalue(g, gt(l));
     if (l->namecall)
         stringmark(l->namecall);
     for (StkId o = l->stack; o < l->top; o++)
         markvalue(g, o);
     /* final traversal? */
-    if (g->gcstate == GCSatomic || (FFlag::LuauGcFullSkipInactiveThreads && clearstack))
+    /* TODO: C++ */
+    if (g->gcstate == GCSatomic /*|| (FFlag::LuauGcFullSkipInactiveThreads && clearstack)*/)
     {
         StkId stack_end = l->stack + l->stacksize;
         for (StkId o = l->top; o < stack_end; o++) /* clear not-marked stack slice */
@@ -320,7 +324,7 @@ static size_t propagatemark(global_State* g)
         g->gray = h->gclist;
         if (traversetable(g, h)) /* table is weak? */
             black2gray(o);       /* keep it gray */
-        return sizeof(Table) + sizeof(TValue) * h->sizearray + sizeof(LuaNode) * sizenode(h);
+        return sizeof(Table) + sizeof(TValue) * h->sizearray + sizeof(LuaNode) * (size_t)(sizenode(h));
     }
     case LUA_TFUNCTION:
     {
@@ -334,16 +338,17 @@ static size_t propagatemark(global_State* g)
         lua_State* th = gco2th(o);
         g->gray = th->gclist;
 
+        /* TODO: C++
         if (FFlag::LuauGcFullSkipInactiveThreads)
         {
             LUAU_ASSERT(!luaC_threadsleeping(th));
 
             // threads that are executing and the main thread are not deactivated
-            bool active = luaC_threadactive(th) || th == th->global->mainthread;
+            int active = luaC_threadactive(th) || th == th->global->mainthread;
 
             if (!active && g->gcstate == GCSpropagate)
             {
-                traversestack(g, th, /* clearstack= */ true);
+                traversestack(g, th, 1); // clearstack
 
                 l_setbit(th->stackstate, THREAD_SLEEPINGBIT);
             }
@@ -354,17 +359,17 @@ static size_t propagatemark(global_State* g)
 
                 black2gray(o);
 
-                traversestack(g, th, /* clearstack= */ false);
+                traversestack(g, th, 0); // !clearstack
             }
         }
-        else
+        else*/
         {
             th->gclist = g->grayagain;
             g->grayagain = o;
 
             black2gray(o);
 
-            traversestack(g, th, /* clearstack= */ false);
+            traversestack(g, th, 0); // !clearstack
         }
 
         return sizeof(lua_State) + sizeof(TValue) * th->stacksize + sizeof(CallInfo) * th->size_ci;
@@ -415,6 +420,7 @@ static int isobjcleared(GCObject* o)
 */
 static void cleartable(lua_State* L, GCObject* l)
 {
+    (void)sizeof(L);
     while (l)
     {
         Table* h = gco2h(l);
@@ -431,6 +437,8 @@ static void cleartable(lua_State* L, GCObject* l)
         {
             LuaNode* n = gnode(h, i);
 
+            (void)sizeof(activevalues);
+            /* TODO: C++
             if (FFlag::LuauShrinkWeakTables)
             {
                 // non-empty entry?
@@ -439,8 +447,8 @@ static void cleartable(lua_State* L, GCObject* l)
                     // can we clear key or value?
                     if (iscleared(gkey(n)) || iscleared(gval(n)))
                     {
-                        setnilvalue(gval(n)); /* remove value ... */
-                        removeentry(n);       /* remove entry from table */
+                        setnilvalue(gval(n)); // remove value ...
+                        removeentry(n);       // remove entry from table
                     }
                     else
                     {
@@ -448,7 +456,7 @@ static void cleartable(lua_State* L, GCObject* l)
                     }
                 }
             }
-            else
+            else*/
             {
                 if (!ttisnil(gval(n)) && /* non-empty entry? */
                     (iscleared(gkey(n)) || iscleared(gval(n))))
@@ -459,6 +467,7 @@ static void cleartable(lua_State* L, GCObject* l)
             }
         }
 
+        /* TODO: C++
         if (FFlag::LuauShrinkWeakTables)
         {
             if (const char* modev = gettablemode(L->global, h))
@@ -471,7 +480,7 @@ static void cleartable(lua_State* L, GCObject* l)
                         luaH_resizehash(L, h, activevalues);
                 }
             }
-        }
+        }*/
 
         l = h->gclist;
     }
@@ -707,6 +716,7 @@ static size_t singlestep(lua_State* L)
     }
     case GCSpropagate:
     {
+        /* TODO: C++
         if (FFlag::LuauRescanGrayAgain)
         {
             if (g->gray)
@@ -724,7 +734,7 @@ static size_t singlestep(lua_State* L)
                 g->gcstate = GCSpropagateagain;
             }
         }
-        else
+        else*/
         {
             if (g->gray)
             {
@@ -814,10 +824,10 @@ static int64_t getheaptriggererroroffset(GCHeapTriggerStats* triggerstats, GCCyc
 {
     // adjust for error using Proportional-Integral controller
     // https://en.wikipedia.org/wiki/PID_controller
-    int32_t errorKb = int32_t((cyclestats->atomicstarttotalsizebytes - cyclestats->heapgoalsizebytes) / 1024);
+    int32_t errorKb = (int32_t)((cyclestats->atomicstarttotalsizebytes - cyclestats->heapgoalsizebytes) / 1024);
 
     // we use sliding window for the error integral to avoid error sum 'windup' when the desired target cannot be reached
-    int32_t* slot = &triggerstats->terms[triggerstats->termpos % triggerstats->termcount];
+    int32_t* slot = &triggerstats->terms[triggerstats->termpos % GCHeapTriggerStatsTermCount];
     int32_t prev = *slot;
     *slot = errorKb;
     triggerstats->integral += errorKb - prev;
@@ -837,7 +847,7 @@ static int64_t getheaptriggererroroffset(GCHeapTriggerStats* triggerstats, GCCyc
 
     double totalTerm = proportionalTerm + integralTerm;
 
-    return int64_t(totalTerm * 1024);
+    return (int64_t)(totalTerm * 1024);
 }
 
 static size_t getheaptrigger(global_State* g, size_t heapgoal)
@@ -857,15 +867,15 @@ static size_t getheaptrigger(global_State* g, size_t heapgoal)
     double allocationrate = (currcycle->atomicstarttotalsizebytes - lastcycle->endtotalsizebytes) / allocationduration;
     double markduration = currcycle->atomicstarttimestamp - currcycle->starttimestamp;
 
-    int64_t expectedgrowth = int64_t(markduration * allocationrate);
+    int64_t expectedgrowth = (int64_t)(markduration * allocationrate);
     int64_t offset = getheaptriggererroroffset(&g->gcstats.triggerstats, currcycle);
     int64_t heaptrigger = heapgoal - (expectedgrowth + offset);
 
     // clamp the trigger between memory use at the end of the cycle and the heap goal
-    return heaptrigger < int64_t(g->totalbytes) ? g->totalbytes : (heaptrigger > int64_t(heapgoal) ? heapgoal : size_t(heaptrigger));
+    return heaptrigger < (int64_t)(g->totalbytes) ? g->totalbytes : (heaptrigger > (int64_t)(heapgoal) ? heapgoal : (size_t)(heaptrigger));
 }
 
-void luaC_step(lua_State* L, bool assist)
+void luaC_step(lua_State* L, int assist)
 {
     global_State* g = L->global;
     ptrdiff_t lim = (g->gcstepsize / 100) * g->gcstepmul; /* how much to work */
@@ -994,6 +1004,7 @@ void luaC_fullgc(lua_State* L)
 
 void luaC_barrierupval(lua_State* L, GCObject* v)
 {
+    /* TODO: C++
     if (FFlag::LuauGcFullSkipInactiveThreads)
     {
         global_State* g = L->global;
@@ -1002,6 +1013,9 @@ void luaC_barrierupval(lua_State* L, GCObject* v)
         if (keepinvariant(g))
             reallymarkobject(g, v);
     }
+    */
+    (void)sizeof(L);
+    (void)sizeof(v);
 }
 
 void luaC_barrierf(lua_State* L, GCObject* o, GCObject* v)
@@ -1022,12 +1036,15 @@ void luaC_barriertable(lua_State* L, Table* t, GCObject* v)
     GCObject* o = obj2gco(t);
 
     // in the second propagation stage, table assignment barrier works as a forward barrier
+    /* TODO: C++
     if (FFlag::LuauRescanGrayAgainForwardBarrier && g->gcstate == GCSpropagateagain)
     {
         LUAU_ASSERT(isblack(o) && iswhite(v) && !isdead(g, v) && !isdead(g, o));
         reallymarkobject(g, v);
         return;
     }
+    */
+    (void)sizeof(v);
 
     LUAU_ASSERT(isblack(o) && !isdead(g, o));
     LUAU_ASSERT(g->gcstate != GCSpause);
@@ -1102,9 +1119,10 @@ static void validatetable(global_State* g, Table* h)
 {
     int sizenode = 1 << h->lsizenode;
 
+    /* TODO: C++
     if (FFlag::LuauArrayBoundary)
         LUAU_ASSERT(h->lastfree <= sizenode);
-    else
+    else*/
         LUAU_ASSERT(h->lastfree >= 0 && h->lastfree <= sizenode);
 
     if (h->metatable)
@@ -1122,7 +1140,7 @@ static void validatetable(global_State* g, Table* h)
 
         if (!ttisnil(gval(n)))
         {
-            TValue k = {};
+            TValue k = {0};
             k.tt = gkey(n)->tt;
             k.value = gkey(n)->value;
 
@@ -1314,9 +1332,9 @@ void luaC_validate(lua_State* L)
     }
 }
 
-inline bool safejson(char ch)
+inline int safejson(char ch)
 {
-    return unsigned(ch) < 128 && ch >= 32 && ch != '\\' && ch != '\"';
+    return (unsigned)(ch) < 128 && ch >= 32 && ch != '\\' && ch != '\"';
 }
 
 static void dumpref(FILE* f, GCObject* o)
@@ -1326,7 +1344,7 @@ static void dumpref(FILE* f, GCObject* o)
 
 static void dumprefs(FILE* f, TValue* data, size_t size)
 {
-    bool first = true;
+    int first = 1;
 
     for (size_t i = 0; i < size; ++i)
     {
@@ -1334,7 +1352,7 @@ static void dumprefs(FILE* f, TValue* data, size_t size)
         {
             if (!first)
                 fputc(',', f);
-            first = false;
+            first = 0;
 
             dumpref(f, gcvalue(&data[i]));
         }
@@ -1349,42 +1367,42 @@ static void dumpstringdata(FILE* f, const char* data, size_t len)
 
 static void dumpstring(FILE* f, TString* ts)
 {
-    fprintf(f, "{\"type\":\"string\",\"cat\":%d,\"size\":%d,\"data\":\"", ts->memcat, int(sizestring(ts->len)));
+    fprintf(f, "{\"type\":\"string\",\"cat\":%d,\"size\":%d,\"data\":\"", ts->memcat, (int)(sizestring(ts->len)));
     dumpstringdata(f, ts->data, ts->len);
     fprintf(f, "\"}");
 }
 
 static void dumptable(FILE* f, Table* h)
 {
-    size_t size = sizeof(Table) + (h->node == &luaH_dummynode ? 0 : sizenode(h) * sizeof(LuaNode)) + h->sizearray * sizeof(TValue);
+    size_t size = sizeof(Table) + (h->node == &luaH_dummynode ? 0 : (size_t)(sizenode(h)) * sizeof(LuaNode)) + h->sizearray * sizeof(TValue);
 
-    fprintf(f, "{\"type\":\"table\",\"cat\":%d,\"size\":%d", h->memcat, int(size));
+    fprintf(f, "{\"type\":\"table\",\"cat\":%d,\"size\":%d", h->memcat, (int)(size));
 
     if (h->node != &luaH_dummynode)
     {
         fprintf(f, ",\"pairs\":[");
 
-        bool first = true;
+        int first = 1;
 
         for (int i = 0; i < sizenode(h); ++i)
         {
-            const LuaNode& n = h->node[i];
+            const LuaNode* n = &h->node[i];
 
-            if (!ttisnil(&n.val) && (iscollectable(&n.key) || iscollectable(&n.val)))
+            if (!ttisnil(&n->val) && (iscollectable(&n->key) || iscollectable(&n->val)))
             {
                 if (!first)
                     fputc(',', f);
-                first = false;
+                first = 0;
 
-                if (iscollectable(&n.key))
-                    dumpref(f, gcvalue(&n.key));
+                if (iscollectable(&n->key))
+                    dumpref(f, gcvalue(&n->key));
                 else
                     fprintf(f, "null");
 
                 fputc(',', f);
 
-                if (iscollectable(&n.val))
-                    dumpref(f, gcvalue(&n.val));
+                if (iscollectable(&n->val))
+                    dumpref(f, gcvalue(&n->val));
                 else
                     fprintf(f, "null");
             }
@@ -1409,7 +1427,7 @@ static void dumptable(FILE* f, Table* h)
 static void dumpclosure(FILE* f, Closure* cl)
 {
     fprintf(f, "{\"type\":\"function\",\"cat\":%d,\"size\":%d", cl->memcat,
-        cl->isC ? int(sizeCclosure(cl->nupvalues)) : int(sizeLclosure(cl->nupvalues)));
+        cl->isC ? (int)(sizeCclosure(cl->nupvalues)) : (int)(sizeLclosure(cl->nupvalues)));
 
     fprintf(f, ",\"env\":");
     dumpref(f, obj2gco(cl->env));
@@ -1438,7 +1456,7 @@ static void dumpclosure(FILE* f, Closure* cl)
 
 static void dumpudata(FILE* f, Udata* u)
 {
-    fprintf(f, "{\"type\":\"userdata\",\"cat\":%d,\"size\":%d,\"tag\":%d", u->memcat, int(sizeudata(u->len)), u->tag);
+    fprintf(f, "{\"type\":\"userdata\",\"cat\":%d,\"size\":%d,\"tag\":%d", u->memcat, (int)(sizeudata(u->len)), u->tag);
 
     if (u->metatable)
     {
@@ -1452,7 +1470,7 @@ static void dumpthread(FILE* f, lua_State* th)
 {
     size_t size = sizeof(lua_State) + sizeof(TValue) * th->stacksize + sizeof(CallInfo) * th->size_ci;
 
-    fprintf(f, "{\"type\":\"thread\",\"cat\":%d,\"size\":%d", th->memcat, int(size));
+    fprintf(f, "{\"type\":\"thread\",\"cat\":%d,\"size\":%d", th->memcat, (int)(size));
 
     if (iscollectable(&th->l_gt))
     {
@@ -1493,7 +1511,7 @@ static void dumpproto(FILE* f, Proto* p)
     size_t size = sizeof(Proto) + sizeof(Instruction) * p->sizecode + sizeof(Proto*) * p->sizep + sizeof(TValue) * p->sizek + p->sizelineinfo +
                   sizeof(LocVar) * p->sizelocvars + sizeof(TString*) * p->sizeupvalues;
 
-    fprintf(f, "{\"type\":\"proto\",\"cat\":%d,\"size\":%d", p->memcat, int(size));
+    fprintf(f, "{\"type\":\"proto\",\"cat\":%d,\"size\":%d", p->memcat, (int)(size));
 
     if (p->source)
     {
@@ -1526,7 +1544,7 @@ static void dumpproto(FILE* f, Proto* p)
 
 static void dumpupval(FILE* f, UpVal* uv)
 {
-    fprintf(f, "{\"type\":\"upvalue\",\"cat\":%d,\"size\":%d", uv->memcat, int(sizeof(UpVal)));
+    fprintf(f, "{\"type\":\"upvalue\",\"cat\":%d,\"size\":%d", uv->memcat, (int)(sizeof(UpVal)));
 
     if (iscollectable(uv->v))
     {
@@ -1541,25 +1559,32 @@ static void dumpobj(FILE* f, GCObject* o)
     switch (o->gch.tt)
     {
     case LUA_TSTRING:
-        return dumpstring(f, gco2ts(o));
+        dumpstring(f, gco2ts(o));
+        break;
 
     case LUA_TTABLE:
-        return dumptable(f, gco2h(o));
+        dumptable(f, gco2h(o));
+        break;
 
     case LUA_TFUNCTION:
-        return dumpclosure(f, gco2cl(o));
+        dumpclosure(f, gco2cl(o));
+        break;
 
     case LUA_TUSERDATA:
-        return dumpudata(f, gco2u(o));
+        dumpudata(f, gco2u(o));
+        break;
 
     case LUA_TTHREAD:
-        return dumpthread(f, gco2th(o));
+        dumpthread(f, gco2th(o));
+        break;
 
     case LUA_TPROTO:
-        return dumpproto(f, gco2p(o));
+        dumpproto(f, gco2p(o));
+        break;
 
     case LUA_TUPVAL:
-        return dumpupval(f, gco2uv(o));
+        dumpupval(f, gco2uv(o));
+        break;
 
     default:
         LUAU_ASSERT(0);
@@ -1587,7 +1612,7 @@ static void dumplist(FILE* f, GCObject* o)
 void luaC_dump(lua_State* L, void* file, const char* (*categoryName)(lua_State* L, uint8_t memcat))
 {
     global_State* g = L->global;
-    FILE* f = static_cast<FILE*>(file);
+    FILE* f = (FILE*)file;
 
     fprintf(f, "{\"objects\":{\n");
     dumplist(f, g->rootgc);
@@ -1604,17 +1629,18 @@ void luaC_dump(lua_State* L, void* file, const char* (*categoryName)(lua_State* 
 
     fprintf(f, "},\"stats\":{\n");
 
-    fprintf(f, "\"size\":%d,\n", int(g->totalbytes));
+    fprintf(f, "\"size\":%d,\n", (int)(g->totalbytes));
 
     fprintf(f, "\"categories\":{\n");
     for (int i = 0; i < LUA_MEMORY_CATEGORIES; i++)
     {
-        if (size_t bytes = g->memcatbytes[i])
+        size_t bytes = g->memcatbytes[i];
+        if (bytes)
         {
             if (categoryName)
-                fprintf(f, "\"%d\":{\"name\":\"%s\", \"size\":%d},\n", i, categoryName(L, i), int(bytes));
+                fprintf(f, "\"%d\":{\"name\":\"%s\", \"size\":%d},\n", i, categoryName(L, (uint8_t)i), (int)(bytes));
             else
-                fprintf(f, "\"%d\":{\"size\":%d},\n", i, int(bytes));
+                fprintf(f, "\"%d\":{\"size\":%d},\n", i, (int)(bytes));
         }
     }
     fprintf(f, "\"none\":{}\n"); // to avoid issues with trailing ,
@@ -1636,7 +1662,7 @@ int64_t luaC_allocationrate(lua_State* L)
         if (duration < durationthreshold)
             return -1;
 
-        return int64_t((g->totalbytes - g->gcstats.lastcycle.endtotalsizebytes) / duration);
+        return (int64_t)((g->totalbytes - g->gcstats.lastcycle.endtotalsizebytes) / duration);
     }
 
     // totalbytes is unstable during the sweep, use the rate measured at the end of mark phase
@@ -1645,7 +1671,7 @@ int64_t luaC_allocationrate(lua_State* L)
     if (duration < durationthreshold)
         return -1;
 
-    return int64_t((g->gcstats.currcycle.atomicstarttotalsizebytes - g->gcstats.lastcycle.endtotalsizebytes) / duration);
+    return (int64_t)((g->gcstats.currcycle.atomicstarttotalsizebytes - g->gcstats.lastcycle.endtotalsizebytes) / duration);
 }
 
 void luaC_wakethread(lua_State* L)

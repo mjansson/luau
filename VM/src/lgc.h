@@ -83,7 +83,7 @@ LUAU_FASTFLAG(LuauGcFullSkipInactiveThreads)*/
         if (L->global->totalbytes >= L->global->GCthreshold) \
         { \
             condhardmemtests(luaC_validate(L), 1); \
-            luaC_step(L, true); \
+            luaC_step(L, 1); \
         } \
         else \
         { \

@@ -52,15 +52,15 @@ static int db_info(lua_State* L)
         return 0;
 
     int results = 0;
-    bool occurs[26] = {};
+    int occurs[26] = {0};
 
     for (const char* it = options; *it; ++it)
     {
-        if (unsigned(*it - 'a') < 26)
+        if ((unsigned)(*it - 'a') < 26)
         {
             if (occurs[*it - 'a'])
                 luaL_argerror(L, arg + 2, "duplicate option");
-            occurs[*it - 'a'] = true;
+            occurs[*it - 'a'] = 1;
         }
 
         switch (*it)
@@ -132,7 +132,7 @@ static int db_traceback(lua_State* L)
         {
             char line[32];
 #ifdef _MSC_VER
-            _itoa(ar.currentline, line, 10); // 5x faster than sprintf
+            _itoa_s(ar.currentline, line, sizeof(line), 10); // 5x faster than sprintf
 #else
             sprintf(line, "%d", ar.currentline);
 #endif

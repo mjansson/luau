@@ -125,7 +125,7 @@ static int luaB_getfenv(lua_State* L)
         lua_pushvalue(L, LUA_GLOBALSINDEX); /* return the thread's global env. */
     else
         lua_getfenv(L, -1);
-    lua_setsafeenv(L, -1, false);
+    lua_setsafeenv(L, -1, 0);
     return 1;
 }
 
@@ -134,7 +134,7 @@ static int luaB_setfenv(lua_State* L)
     luaL_checktype(L, 2, LUA_TTABLE);
     getfunc(L, 0);
     lua_pushvalue(L, 2);
-    lua_setsafeenv(L, -1, false);
+    lua_setsafeenv(L, -1, 0);
     if (lua_isnumber(L, 1) && lua_tonumber(L, 1) == 0)
     {
         /* change environment of current thread */
@@ -305,14 +305,14 @@ static int luaB_pcallcont(lua_State* L, int status)
     if (status == 0)
     {
         lua_rawcheckstack(L, 1);
-        lua_pushboolean(L, true);
+        lua_pushboolean(L, 1);
         lua_insert(L, 1); // insert status before all results
         return lua_gettop(L);
     }
     else
     {
         lua_rawcheckstack(L, 1);
-        lua_pushboolean(L, false);
+        lua_pushboolean(L, 0);
         lua_insert(L, -2); // insert status before error object
         return 2;
     }
@@ -366,14 +366,14 @@ static int luaB_xpcallcont(lua_State* L, int status)
     if (status == 0)
     {
         lua_rawcheckstack(L, 1);
-        lua_pushboolean(L, true);
+        lua_pushboolean(L, 1);
         lua_replace(L, 1);    // replace error function with status
         return lua_gettop(L); /* return status + all results */
     }
     else
     {
         lua_rawcheckstack(L, 3);
-        lua_pushboolean(L, false);
+        lua_pushboolean(L, 0);
         lua_pushvalue(L, 1);  // push error function on top of the stack
         lua_pushvalue(L, -3); // push error object (that was on top of the stack before)
 
@@ -390,7 +390,7 @@ static int luaB_xpcallcont(lua_State* L, int status)
 static int luaB_tostring(lua_State* L)
 {
     luaL_checkany(L, 1);
-    luaL_tolstring(L, 1, NULL);
+    luaL_tolstring(L, 1, 0);
     return 1;
 }
 
@@ -399,7 +399,7 @@ static int luaB_newproxy(lua_State* L)
     int t = lua_type(L, 1);
     luaL_argexpected(L, t == LUA_TNONE || t == LUA_TNIL || t == LUA_TBOOLEAN, 1, "nil or boolean");
 
-    bool needsmt = lua_toboolean(L, 1);
+    int needsmt = lua_toboolean(L, 1);
 
     lua_newuserdata(L, 0, 0);
 
@@ -431,13 +431,13 @@ static const luaL_Reg base_funcs[] = {
     {"tostring", luaB_tostring},
     {"type", luaB_type},
     {"typeof", luaB_typeof},
-    {NULL, NULL},
+    {0, 0},
 };
 
 static void auxopen(lua_State* L, const char* name, lua_CFunction f, lua_CFunction u)
 {
     lua_pushcfunction(L, u);
-    lua_pushcfunction(L, f, name, 1);
+    lua_pushcfunction_full(L, f, name, 1, 0);
     lua_setfield(L, -2, name);
 }
 
@@ -456,10 +456,10 @@ LUALIB_API int luaopen_base(lua_State* L)
     auxopen(L, "ipairs", luaB_ipairs, luaB_inext);
     auxopen(L, "pairs", luaB_pairs, luaB_next);
 
-    lua_pushcfunction(L, luaB_pcally, "pcall", 0, luaB_pcallcont);
+    lua_pushcfunction_full(L, luaB_pcally, "pcall", 0, luaB_pcallcont);
     lua_setfield(L, -2, "pcall");
 
-    lua_pushcfunction(L, luaB_xpcally, "xpcall", 0, luaB_xpcallcont);
+    lua_pushcfunction_full(L, luaB_xpcally, "xpcall", 0, luaB_xpcallcont);
     lua_setfield(L, -2, "xpcall");
 
     return 1;

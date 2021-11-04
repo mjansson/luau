@@ -67,14 +67,14 @@ LUALIB_API const char* luaL_findtable(lua_State* L, int idx, const char* fname, 
 
 /* generic buffer manipulation */
 
-struct luaL_Buffer
+typedef struct luaL_Buffer
 {
     char* p;   // current position in buffer
     char* end; // end of the current buffer
     lua_State* L;
     struct TString* storage;
     char buffer[LUA_BUFFERSIZE];
-};
+} luaL_Buffer;
 
 // when internal buffer storage is exhaused, a mutable string value 'storage' will be placed on the stack
 // in general, functions expect the mutable string buffer to be placed on top of the stack (top-1)

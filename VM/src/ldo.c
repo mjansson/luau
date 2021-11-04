@@ -8,12 +8,12 @@
 #include "lmem.h"
 #include "lvm.h"
 
-#include <stdexcept>
-
 #include <setjmp.h>
 #include <string.h>
+#include <stdlib.h>
 
-LUAU_FASTFLAGVARIABLE(LuauExceptionMessageFix, false)
+/* TODO: C++
+LUAU_FASTFLAGVARIABLE(LuauExceptionMessageFix, false)*/
 
 /*
 ** {======================================================
@@ -22,10 +22,12 @@ LUAU_FASTFLAGVARIABLE(LuauExceptionMessageFix, false)
 */
 
 #if LUA_USE_LONGJMP
+typedef struct lua_jmpbuf lua_jmpbuf;
 struct lua_jmpbuf
 {
     lua_jmpbuf* volatile prev;
     volatile int status;
+    volatile int padding;
     jmp_buf buf;
 };
 
@@ -45,14 +47,15 @@ int luaD_rawrunprotected(lua_State* L, Pfunc f, void* ud)
 
 l_noret luaD_throw(lua_State* L, int errcode)
 {
-    if (lua_jmpbuf* jb = L->global->errorjmp)
+    lua_jmpbuf* jb = L->global->errorjmp;
+    if (jb)
     {
         jb->status = errcode;
         longjmp(jb->buf, 1);
     }
 
-    if (L->global->panic)
-        L->global->panic(L, errcode);
+    if (L->global->cb.panic)
+        L->global->cb.panic(L, errcode);
 
     abort();
 }

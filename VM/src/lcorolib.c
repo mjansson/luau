@@ -5,7 +5,8 @@
 #include "lstate.h"
 #include "lvm.h"
 
-LUAU_FASTFLAGVARIABLE(LuauPreferXpush, false)
+/* TODO: C++
+LUAU_FASTFLAGVARIABLE(LuauPreferXpush, false)*/
 
 #define CO_RUN 0 /* running */
 #define CO_SUS 1 /* suspended */
@@ -146,6 +147,7 @@ static int luaB_coresumey(lua_State* L)
 
 static int luaB_coresumecont(lua_State* L, int status)
 {
+    (void)sizeof(status);
     lua_State* co = lua_tothread(L, 1);
     luaL_argexpected(L, co, 1, "thread");
 
@@ -187,6 +189,7 @@ static int luaB_auxwrapy(lua_State* L)
 
 static int luaB_auxwrapcont(lua_State* L, int status)
 {
+    (void)sizeof(status);
     lua_State* co = lua_tothread(L, lua_upvalueindex(1));
 
     // if coroutine still hasn't yielded after the break, break current thread again
@@ -203,11 +206,12 @@ static int luaB_cocreate(lua_State* L)
     luaL_checktype(L, 1, LUA_TFUNCTION);
     lua_State* NL = lua_newthread(L);
 
+    /* TODO: C++
     if (FFlag::LuauPreferXpush)
     {
         lua_xpush(L, NL, 1); // push function on top of NL
     }
-    else
+    else*/
     {
         lua_pushvalue(L, 1); /* move function to top */
         lua_xmove(L, NL, 1); /* move function from L to NL */
@@ -220,7 +224,7 @@ static int luaB_cowrap(lua_State* L)
 {
     luaB_cocreate(L);
 
-    lua_pushcfunction(L, luaB_auxwrapy, NULL, 1, luaB_auxwrapcont);
+    lua_pushcfunction_full(L, luaB_auxwrapy, NULL, 1, luaB_auxwrapcont);
 
     return 1;
 }
@@ -258,7 +262,7 @@ LUALIB_API int luaopen_coroutine(lua_State* L)
 {
     luaL_register(L, LUA_COLIBNAME, co_funcs);
 
-    lua_pushcfunction(L, luaB_coresumey, "resume", 0, luaB_coresumecont);
+    lua_pushcfunction_full(L, luaB_coresumey, "resume", 0, luaB_coresumecont);
     lua_setfield(L, -2, "resume");
 
     return 1;

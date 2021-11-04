@@ -23,7 +23,7 @@ LUAI_FUNC int luaV_tostring(lua_State* L, StkId obj);
 LUAI_FUNC void luaV_gettable(lua_State* L, const TValue* t, TValue* key, StkId val);
 LUAI_FUNC void luaV_settable(lua_State* L, const TValue* t, TValue* key, StkId val);
 LUAI_FUNC void luaV_concat(lua_State* L, int total, int last);
-LUAI_FUNC void luaV_getimport(lua_State* L, Table* env, TValue* k, uint32_t id, bool propagatenil);
+LUAI_FUNC void luaV_getimport(lua_State* L, Table* env, TValue* k, uint32_t id, int propagatenil);
 
 LUAI_FUNC void luau_execute(lua_State* L);
 LUAI_FUNC int luau_precall(lua_State* L, struct lua_TValue* func, int nresults);
