@@ -6,7 +6,8 @@
 #include "lobject.h"
 #include "lstate.h"
 
-LUAU_FASTFLAG(LuauGcFullSkipInactiveThreads)
+/* TODO: C++
+LUAU_FASTFLAG(LuauGcFullSkipInactiveThreads)*/
 
 /*
 ** Possible states of the Garbage Collector
@@ -135,7 +136,7 @@ LUAU_FASTFLAG(LuauGcFullSkipInactiveThreads)
 #define luaC_link(L, o, tt) luaC_linkobj(L, cast_to(GCObject*, (o)), tt)
 
 LUAI_FUNC void luaC_freeall(lua_State* L);
-LUAI_FUNC void luaC_step(lua_State* L, bool assist);
+LUAI_FUNC void luaC_step(lua_State* L, int assist);
 LUAI_FUNC void luaC_fullgc(lua_State* L);
 LUAI_FUNC void luaC_linkobj(lua_State* L, GCObject* o, uint8_t tt);
 LUAI_FUNC void luaC_linkupval(lua_State* L, UpVal* uv);

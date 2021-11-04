@@ -51,6 +51,7 @@ static void freestack(lua_State* L, lua_State* L1)
 */
 static void f_luaopen(lua_State* L, void* ud)
 {
+    (void)sizeof(ud);
     global_State* g = L->global;
     stack_init(L, L);                             /* init stack */
     sethvalue(L, gt(L), luaH_new(L, 0, 2));       /* table of globals */
@@ -74,7 +75,7 @@ static void preinit_state(lua_State* L, global_State* g)
     L->base_ci = L->ci = NULL;
     L->namecall = NULL;
     L->cachedslot = 0;
-    L->singlestep = false;
+    L->singlestep = 0;
     L->stackstate = 0;
     L->activememcat = 0;
     L->userdata = NULL;
@@ -179,8 +180,8 @@ lua_State* lua_newstate(lua_Alloc f, void* ud)
 
     g->memcatbytes[0] = sizeof(LG);
 
-    g->cb = lua_Callbacks();
-    g->gcstats = GCStats();
+    memset(&g->cb, 0, sizeof(lua_Callbacks));
+    memset(&g->gcstats, 0, sizeof(GCStats));
 
     if (luaD_rawrunprotected(L, f_luaopen, NULL) != 0)
     {

@@ -22,7 +22,7 @@ LUAI_FUNC l_noret luaG_indexerror(lua_State* L, const TValue* p1, const TValue* 
 LUAI_FUNC LUA_PRINTF_ATTR(2, 3) l_noret luaG_runerrorL(lua_State* L, const char* fmt, ...);
 LUAI_FUNC void luaG_pusherror(lua_State* L, const char* error);
 
-LUAI_FUNC void luaG_breakpoint(lua_State* L, Proto* p, int line, bool enable);
-LUAI_FUNC bool luaG_onbreak(lua_State* L);
+LUAI_FUNC void luaG_breakpoint(lua_State* L, Proto* p, int line, int enable);
+LUAI_FUNC int luaG_onbreak(lua_State* L);
 
 LUAI_FUNC int luaG_getline(Proto* p, int pc);

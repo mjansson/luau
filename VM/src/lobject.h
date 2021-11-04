@@ -363,7 +363,7 @@ typedef struct Closure
 
 typedef struct TKey
 {
-    ::Value value;
+    Value value;
     int extra;
     unsigned tt : 4;
     int next : 28; /* for chaining */

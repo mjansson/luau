@@ -20,11 +20,7 @@
 #define LUAU_DEBUGBREAK() __builtin_trap()
 #endif
 
-
-
-
-
-
+#ifdef __cplusplus
 
 namespace Luau
 {
@@ -131,3 +127,15 @@ FValue<T>* FValue<T>::list = nullptr;
     { \
     Luau::FValue<int> flag(#flag, def, true, nullptr); \
     }
+
+#else
+
+#if !defined(NDEBUG) || defined(LUAU_ENABLE_ASSERT)
+#include <assert.h>
+#define LUAU_ASSERT(expr) assert(!!(expr))
+#define LUAU_ASSERTENABLED
+#else
+#define LUAU_ASSERT(expr) (void)sizeof(!!(expr))
+#endif
+
+#endif

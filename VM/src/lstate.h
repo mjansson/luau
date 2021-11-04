@@ -78,49 +78,49 @@ typedef struct CallInfo
 #define f_isLua(ci) (!ci_func(ci)->isC)
 #define isLua(ci) (ttisfunction((ci)->func) && f_isLua(ci))
 
-struct GCCycleStats
+typedef struct GCCycleStats
 {
-    size_t heapgoalsizebytes = 0;
-    size_t heaptriggersizebytes = 0;
+    size_t heapgoalsizebytes;
+    size_t heaptriggersizebytes;
 
-    double waittime = 0.0; // time from end of the last cycle to the start of a new one
+    double waittime; // time from end of the last cycle to the start of a new one
 
-    double starttimestamp = 0.0;
-    double endtimestamp = 0.0;
+    double starttimestamp;
+    double endtimestamp;
 
-    double marktime = 0.0;
+    double marktime;
 
-    double atomicstarttimestamp = 0.0;
-    size_t atomicstarttotalsizebytes = 0;
-    double atomictime = 0.0;
+    double atomicstarttimestamp;
+    size_t atomicstarttotalsizebytes;
+    double atomictime;
 
-    double sweeptime = 0.0;
+    double sweeptime;
 
-    size_t markitems = 0;
-    size_t sweepitems = 0;
+    size_t markitems;
+    size_t sweepitems;
 
-    size_t assistwork = 0;
-    size_t explicitwork = 0;
+    size_t assistwork;
+    size_t explicitwork;
 
-    size_t endtotalsizebytes = 0;
-};
+    size_t endtotalsizebytes;
+} GCCycleStats;
 
 // data for proportional-integral controller of heap trigger value
-struct GCHeapTriggerStats
+#define GCHeapTriggerStatsTermCount 32
+typedef struct GCHeapTriggerStats
 {
-    static const unsigned termcount = 32;
-    int32_t terms[termcount] = {0};
-    uint32_t termpos = 0;
-    int32_t integral = 0;
-};
+    int32_t terms[GCHeapTriggerStatsTermCount];
+    uint32_t termpos;
+    int32_t integral;
+} GCHeapTriggerStats;
 
-struct GCStats
+typedef struct GCStats
 {
-    double stepexplicittimeacc = 0.0;
-    double stepassisttimeacc = 0.0;
+    double stepexplicittimeacc;
+    double stepassisttimeacc;
 
     // when cycle is completed, last cycle values are updated
-    uint64_t completedcycles = 0;
+    uint64_t completedcycles;
 
     GCCycleStats lastcycle;
     GCCycleStats currcycle;
@@ -129,7 +129,7 @@ struct GCStats
     GCCycleStats cyclestatsacc;
 
     GCHeapTriggerStats triggerstats;
-};
+} GCStats;
 
 /*
 ** `global state', shared by all threads of this state
@@ -204,7 +204,7 @@ struct lua_State
     uint8_t activememcat; /* memory category that is used for new GC object allocations */
     uint8_t stackstate;
 
-    bool singlestep; /* call debugstep hook after each instruction */
+    int singlestep; /* call debugstep hook after each instruction */
 
 
     StkId top;                                        /* first free slot in the stack */

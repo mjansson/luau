@@ -92,7 +92,7 @@ static void finishGcCycleStats(global_State* g)
 
     g->gcstats.completedcycles++;
     g->gcstats.lastcycle = g->gcstats.currcycle;
-    g->gcstats.currcycle = GCCycleStats();
+    memset(&g->gcstats.currcycle, 0, sizeof(GCCycleStats));
 
     g->gcstats.cyclestatsacc.markitems += g->gcstats.lastcycle.markitems;
     g->gcstats.cyclestatsacc.marktime += g->gcstats.lastcycle.marktime;

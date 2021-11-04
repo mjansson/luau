@@ -163,7 +163,9 @@ LUA_API void lua_pushstring(lua_State* L, const char* s);
 LUA_API const char* lua_pushvfstring(lua_State* L, const char* fmt, va_list argp);
 LUA_API LUA_PRINTF_ATTR(2, 3) const char* lua_pushfstringL(lua_State* L, const char* fmt, ...);
 LUA_API void lua_pushcfunction(
-    lua_State* L, lua_CFunction fn, const char* debugname = NULL, int nup = 0, lua_Continuation cont = NULL);
+    lua_State* L, lua_CFunction fn);
+LUA_API void lua_pushcfunction_full(
+    lua_State* L, lua_CFunction fn, const char* debugname, int nup, lua_Continuation cont);
 LUA_API void lua_pushboolean(lua_State* L, int b);
 LUA_API void lua_pushlightuserdata(lua_State* L, void* p);
 LUA_API int lua_pushthread(lua_State* L);
@@ -178,9 +180,9 @@ LUA_API void lua_rawget(lua_State* L, int idx);
 LUA_API void lua_rawgeti(lua_State* L, int idx, int n);
 LUA_API void lua_createtable(lua_State* L, int narr, int nrec);
 
-LUA_API void lua_setreadonly(lua_State* L, int idx, bool value);
+LUA_API void lua_setreadonly(lua_State* L, int idx, int value);
 LUA_API int lua_getreadonly(lua_State* L, int idx);
-LUA_API void lua_setsafeenv(lua_State* L, int idx, bool value);
+LUA_API void lua_setsafeenv(lua_State* L, int idx, int value);
 
 LUA_API void* lua_newuserdata(lua_State* L, size_t sz, int tag);
 LUA_API void* lua_newuserdatadtor(lua_State* L, size_t sz, void (*dtor)(void*));
@@ -200,7 +202,7 @@ LUA_API int lua_setfenv(lua_State* L, int idx);
 /*
 ** `load' and `call' functions (load and run Luau bytecode)
 */
-LUA_API int luau_load(lua_State* L, const char* chunkname, const char* data, size_t size, int env = 0);
+LUA_API int luau_load(lua_State* L, const char* chunkname, const char* data, size_t size, int env);
 LUA_API void lua_call(lua_State* L, int nargs, int nresults);
 LUA_API int lua_pcall(lua_State* L, int nargs, int nresults, int errfunc);
 
@@ -317,8 +319,8 @@ LUA_API const char* lua_setlocal(lua_State* L, int level, int n);
 LUA_API const char* lua_getupvalue(lua_State* L, int funcindex, int n);
 LUA_API const char* lua_setupvalue(lua_State* L, int funcindex, int n);
 
-LUA_API void lua_singlestep(lua_State* L, bool singlestep);
-LUA_API void lua_breakpoint(lua_State* L, int funcindex, int line, bool enable);
+LUA_API void lua_singlestep(lua_State* L, int singlestep);
+LUA_API void lua_breakpoint(lua_State* L, int funcindex, int line, int enable);
 
 /* Warning: this function is not thread-safe since it stores the result in a shared global array! Only use for debugging. */
 LUA_API const char* lua_debugtrace(lua_State* L);
@@ -344,7 +346,7 @@ struct lua_Debug
  *
  * Note: interrupt is safe to set from an arbitrary thread but all other callbacks
  * can only be changed when the VM is not running any code */
-struct lua_Callbacks
+typedef struct lua_Callbacks
 {
     void (*interrupt)(lua_State* L, int gc);  /* gets called at safepoints (loop back edges, call/ret, gc) if set */
     void (*panic)(lua_State* L, int errcode); /* gets called when an unprotected error is raised (if longjmp is used) */
@@ -356,7 +358,7 @@ struct lua_Callbacks
     void (*debugstep)(lua_State* L, lua_Debug* ar);      /* gets called after each instruction in single step mode */
     void (*debuginterrupt)(lua_State* L, lua_Debug* ar); /* gets called when thread execution is interrupted by break in another thread */
     void (*debugprotectederror)(lua_State* L);           /* gets called when protected call results in an error */
-};
+} lua_Callbacks;
 
 LUA_API lua_Callbacks* lua_callbacks(lua_State* L);
 
