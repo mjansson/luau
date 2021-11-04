@@ -123,12 +123,16 @@ const TString* luaT_objtypenamestr(lua_State* L, const TValue* o)
         if (ttisstring(type))
             return tsvalue(type);
     }
-    else if (Table* mt = L->global->mt[ttype(o)])
+    else
     {
-        const TValue* type = luaH_getstr(mt, L->global->tmname[TM_TYPE]);
+        Table* mt = L->global->mt[ttype(o)];
+        if (mt)
+        {
+            const TValue* type = luaH_getstr(mt, L->global->tmname[TM_TYPE]);
 
-        if (ttisstring(type))
-            return tsvalue(type);
+            if (ttisstring(type))
+                return tsvalue(type);
+        }
     }
 
     return L->global->ttname[ttype(o)];

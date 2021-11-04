@@ -11,7 +11,7 @@ unsigned int luaS_hash(const char* str, size_t len)
 {
     // Note that this hashing algorithm is replicated in BytecodeBuilder.cpp, BytecodeBuilder::getStringHash
     unsigned int a = 0, b = 0;
-    unsigned int h = unsigned(len);
+    unsigned int h = (unsigned)len;
 
     // hash prefix in 12b chunks (using aligned reads) with ARX based hash (LuaJIT v2.1, lookup3)
     // note that we stop at length<32 to maintain compatibility with Lua 5.1
@@ -52,7 +52,7 @@ void luaS_resize(lua_State* L, int newsize)
     newhash = luaM_newarray(L, newsize, GCObject*, 0);
     tb = &L->global->strt;
     for (i = 0; i < newsize; i++)
-        newhash[i] = NULL;
+        newhash[i] = 0;
     /* rehash */
     for (i = 0; i < tb->size; i++)
     {
@@ -80,7 +80,7 @@ static TString* newlstr(lua_State* L, const char* str, size_t l, unsigned int h)
     if (l > MAXSSIZE)
         luaM_toobig(L);
     ts = luaM_new(L, TString, sizestring(l), L->activememcat);
-    ts->len = unsigned(l);
+    ts->len = (unsigned)l;
     ts->hash = h;
     ts->marked = luaC_white(L->global);
     ts->tt = LUA_TSTRING;
@@ -112,8 +112,8 @@ static void unlinkstrbuf(lua_State* L, TString* ts)
     global_State* g = L->global;
 
     GCObject** p = &g->strbufgc;
-
-    while (GCObject* curr = *p)
+    GCObject* curr = *p;
+    while (curr)
     {
         if (curr == obj2gco(ts))
         {
@@ -140,7 +140,7 @@ TString* luaS_bufstart(lua_State* L, size_t size)
     ts->memcat = L->activememcat;
     linkstrbuf(L, ts);
 
-    ts->len = unsigned(size);
+    ts->len = (unsigned)size;
 
     return ts;
 }
@@ -152,7 +152,7 @@ TString* luaS_buffinish(lua_State* L, TString* ts)
     int bucket = lmod(h, tb->size);
 
     // search if we already have this string in the hash table
-    for (GCObject* o = tb->hash[bucket]; o != NULL; o = o->gch.next)
+    for (GCObject* o = tb->hash[bucket]; o != 0; o = o->gch.next)
     {
         TString* el = gco2ts(o);
 
@@ -187,7 +187,8 @@ TString* luaS_newlstr(lua_State* L, const char* str, size_t l)
 {
     GCObject* o;
     unsigned int h = luaS_hash(str, l);
-    for (o = L->global->strt.hash[lmod(h, L->global->strt.size)]; o != NULL; o = o->gch.next)
+    unsigned int idx = lmod(h, L->global->strt.size);
+    for (o = L->global->strt.hash[idx]; o != 0; o = o->gch.next)
     {
         TString* ts = gco2ts(o);
         if (ts->len == l && (memcmp(str, getstr(ts), l) == 0))
@@ -213,10 +214,10 @@ Udata* luaS_newudata(lua_State* L, size_t s, int tag)
         luaM_toobig(L);
     Udata* u = luaM_new(L, Udata, sizeudata(s), L->activememcat);
     luaC_link(L, u, LUA_TUSERDATA);
-    u->len = int(s);
-    u->metatable = NULL;
+    u->len = (int)s;
+    u->metatable = 0;
     LUAU_ASSERT(tag >= 0 && tag <= 255);
-    u->tag = uint8_t(tag);
+    u->tag = (uint8_t)tag;
     return u;
 }
 
@@ -224,7 +225,7 @@ void luaS_freeudata(lua_State* L, Udata* u)
 {
     LUAU_ASSERT(u->tag < LUA_UTAG_LIMIT || u->tag == UTAG_IDTOR);
 
-    void (*dtor)(void*) = nullptr;
+    void (*dtor)(void*) = 0;
     if (u->tag == UTAG_IDTOR)
         memcpy(&dtor, u->data + u->len - sizeof(dtor), sizeof(dtor));
     else if (u->tag)

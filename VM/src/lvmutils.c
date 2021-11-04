@@ -47,7 +47,7 @@ const float* luaV_tovector(const TValue* obj)
     if (ttisvector(obj))
         return obj->value.v;
 
-    return nullptr;
+    return 0;
 }
 
 static void callTMres(lua_State* L, StkId res, const TValue* f, const TValue* p1, const TValue* p2)
@@ -321,7 +321,7 @@ void luaV_concat(lua_State* L, int total, int last)
             }
 
             char buf[LUA_BUFFERSIZE];
-            TString* ts = nullptr;
+            TString* ts = 0;
 
             if (tl < LUA_BUFFERSIZE)
             {

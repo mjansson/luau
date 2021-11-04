@@ -9,8 +9,8 @@
 #define gval(n) (&(n)->val)
 #define gnext(n) ((n)->key.next)
 
-static_assert(offsetof(LuaNode, val) == 0, "Unexpected Node memory layout, pointer cast below is incorrect");
-#define gval2slot(t, v) int(cast_to(LuaNode*, static_cast<const TValue*>(v)) - t->node)
+_Static_assert(offsetof(LuaNode, val) == 0, "Unexpected Node memory layout, pointer cast below is incorrect");
+#define gval2slot(t, v) ((int)(cast_to(LuaNode*, (const TValue*)(v)) - t->node))
 
 LUAI_FUNC const TValue* luaH_getnum(Table* t, int key);
 LUAI_FUNC TValue* luaH_setnum(lua_State* L, Table* t, int key);

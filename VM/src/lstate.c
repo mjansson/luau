@@ -125,8 +125,17 @@ void luaE_freethread(lua_State* L, lua_State* L1)
     luaM_free(L, L1, sizeof(lua_State), L1->memcat);
 }
 
+static int lua_has_setup;
+extern void lua_setupmemsizeclassconfig();
+extern void lua_setupclock();
+
 lua_State* lua_newstate(lua_Alloc f, void* ud)
 {
+    if (!lua_has_setup) {
+        lua_has_setup = 1;
+        lua_setupmemsizeclassconfig();
+        lua_setupclock();
+    }
     int i;
     lua_State* L;
     global_State* g;

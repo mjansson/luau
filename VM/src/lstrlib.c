@@ -1,5 +1,9 @@
 // This file is part of the Luau programming language and is licensed under MIT License; see LICENSE.txt for details
 // This code is based on Lua 5.x implementation licensed under MIT License; see lua_LICENSE.txt for details
+
+#undef _CRT_SECURE_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS 1
+
 #include "lualib.h"
 
 #include "lstring.h"
@@ -63,7 +67,7 @@ static int str_lower(lua_State* L)
     luaL_Buffer b;
     char* ptr = luaL_buffinitsize(L, &b, l);
     for (size_t i = 0; i < l; i++)
-        *ptr++ = tolower(uchar(s[i]));
+        *ptr++ = (char)tolower(uchar(s[i]));
     luaL_pushresultsize(&b, l);
     return 1;
 }
@@ -75,7 +79,7 @@ static int str_upper(lua_State* L)
     luaL_Buffer b;
     char* ptr = luaL_buffinitsize(L, &b, l);
     for (size_t i = 0; i < l; i++)
-        *ptr++ = toupper(uchar(s[i]));
+        *ptr++ = (char)toupper(uchar(s[i]));
     luaL_pushresultsize(&b, l);
     return 1;
 }
@@ -746,7 +750,7 @@ static int gmatch(lua_State* L)
     luaL_checkstring(L, 2);
     lua_settop(L, 2);
     lua_pushinteger(L, 0);
-    lua_pushcfunction(L, gmatch_aux, NULL, 3);
+    lua_pushcfunction_full(L, gmatch_aux, 0, 3, 0);
     return 1;
 }
 
@@ -1347,7 +1351,7 @@ static void packint(luaL_Buffer* b, unsigned long long n, int islittle, int size
     if (neg && size > SZINT)
     {                                  /* negative number need sign extension? */
         for (i = SZINT; i < size; i++) /* correct extra bytes */
-            buff[islittle ? i : size - 1 - i] = (char)MC;
+            buff[islittle ? i : size - 1 - i] = MC;
     }
     luaL_addlstring(b, buff, size); /* add result to buffer */
 }
@@ -1535,7 +1539,7 @@ static int str_unpack(lua_State* L)
     if (pos < 0)
         pos = 0;
     int n = 0; /* number of results */
-    luaL_argcheck(L, size_t(pos) <= ld, 3, "initial position out of string");
+    luaL_argcheck(L, (size_t)(pos) <= ld, 3, "initial position out of string");
     initheader(L, &h);
     while (*fmt != '\0')
     {
@@ -1550,13 +1554,13 @@ static int str_unpack(lua_State* L)
         {
         case Kint:
         {
-            long long res = unpackint(L, data + pos, h.islittle, size, true);
+            long long res = unpackint(L, data + pos, h.islittle, size, 1);
             lua_pushnumber(L, (double)res);
             break;
         }
         case Kuint:
         {
-            unsigned long long res = unpackint(L, data + pos, h.islittle, size, false);
+            unsigned long long res = unpackint(L, data + pos, h.islittle, size, 0);
             lua_pushnumber(L, (double)res);
             break;
         }

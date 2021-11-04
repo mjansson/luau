@@ -8,7 +8,7 @@
 #define LUAU_FORCEINLINE __forceinline
 #define LUAU_LIKELY(x) x
 #define LUAU_UNLIKELY(x) x
-#define LUAU_UNREACHABLE() __assume(false)
+#define LUAU_UNREACHABLE() __assume(0)
 #define LUAU_DEBUGBREAK() __debugbreak()
 #else
 #define LUAU_NORETURN __attribute__((__noreturn__))

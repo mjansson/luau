@@ -367,10 +367,10 @@ enum LuauOpcode
 #define LUAU_INSN_C(insn) (((insn) >> 24) & 0xff)
 
 // AD encoding: one 8-bit value, one signed 16-bit value
-#define LUAU_INSN_D(insn) (int32_t(insn) >> 16)
+#define LUAU_INSN_D(insn) ((int32_t)(insn) >> 16)
 
 // E encoding: one signed 24-bit value
-#define LUAU_INSN_E(insn) (int32_t(insn) >> 8)
+#define LUAU_INSN_E(insn) ((int32_t)(insn) >> 8)
 
 // Bytecode tags, used internally for bytecode encoded as a string
 enum LuauBytecodeTag

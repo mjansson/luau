@@ -9,13 +9,14 @@
 #include "ldebug.h"
 #include "lvm.h"
 
+/* TODO: C++
 LUAU_DYNAMIC_FASTFLAGVARIABLE(LuauTableMoveTelemetry, false)
 
 LUAU_FASTFLAGVARIABLE(LuauTableFreeze, false)
 
-bool lua_telemetry_table_move_oob_src_from = false;
-bool lua_telemetry_table_move_oob_src_to = false;
-bool lua_telemetry_table_move_oob_dst = false;
+int lua_telemetry_table_move_oob_src_from = 0;
+int lua_telemetry_table_move_oob_src_to = 0;
+int lua_telemetry_table_move_oob_dst = 0;*/
 
 static int foreachi(lua_State* L)
 {
@@ -202,6 +203,7 @@ static int tmove(lua_State* L)
     int tt = !lua_isnoneornil(L, 5) ? 5 : 1; /* destination table */
     luaL_checktype(L, tt, LUA_TTABLE);
 
+    /* TODO: C++
     if (DFFlag::LuauTableMoveTelemetry)
     {
         int nf = lua_objlen(L, 1);
@@ -216,7 +218,7 @@ static int tmove(lua_State* L)
         // destination index must be in bounds in dest table or be exactly at the first empty element (permits concats)
         if (!(t == nt + 1 || (t >= 1 && t <= nt + 1)))
             lua_telemetry_table_move_oob_dst = true;
-    }
+    }*/
 
     if (e >= f)
     { /* otherwise, nothing to move */
@@ -303,9 +305,9 @@ static int tunpack(lua_State* L)
         luaL_error(L, "too many results to unpack");
 
     // fast-path: direct array-to-stack copy
-    if (i == 1 && int(n) <= t->sizearray)
+    if (i == 1 && (int)(n) <= t->sizearray)
     {
-        for (i = 0; i < int(n); i++)
+        for (i = 0; i < (int)(n); i++)
             setobj2s(L, L->top + i, &t->array[i]);
         L->top += n;
     }
@@ -513,14 +515,15 @@ static int tclear(lua_State* L)
 
 static int tfreeze(lua_State* L)
 {
+    /* TODO: C++
     if (!FFlag::LuauTableFreeze)
-        luaG_runerror(L, "table.freeze is disabled");
+        luaG_runerror(L, "table.freeze is disabled");*/
 
     luaL_checktype(L, 1, LUA_TTABLE);
     luaL_argcheck(L, !lua_getreadonly(L, 1), 1, "table is already frozen");
     luaL_argcheck(L, !luaL_getmetafield(L, 1, "__metatable"), 1, "table has a protected metatable");
 
-    lua_setreadonly(L, 1, true);
+    lua_setreadonly(L, 1, 1);
 
     lua_pushvalue(L, 1);
     return 1;
@@ -528,8 +531,9 @@ static int tfreeze(lua_State* L)
 
 static int tisfrozen(lua_State* L)
 {
+    /* TODO: C++
     if (!FFlag::LuauTableFreeze)
-        luaG_runerror(L, "table.isfrozen is disabled");
+        luaG_runerror(L, "table.isfrozen is disabled");*/
 
     luaL_checktype(L, 1, LUA_TTABLE);
 
@@ -562,7 +566,7 @@ LUALIB_API int luaopen_table(lua_State* L)
     luaL_register(L, LUA_TABLIBNAME, tab_funcs);
 
     // Lua 5.1 compat
-    lua_pushcfunction(L, tunpack, "unpack");
+    lua_pushcfunction_full(L, tunpack, "unpack", 0, 0);
     lua_setglobal(L, "unpack");
 
     return 1;

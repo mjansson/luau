@@ -35,7 +35,7 @@ LUALIB_API void luaL_sandbox(lua_State* L)
     while (lua_next(L, LUA_GLOBALSINDEX) != 0)
     {
         if (lua_istable(L, -1))
-            lua_setreadonly(L, -1, true);
+            lua_setreadonly(L, -1, 1);
 
         lua_pop(L, 1);
     }
@@ -43,12 +43,12 @@ LUALIB_API void luaL_sandbox(lua_State* L)
     // set all builtin metatables to read-only
     lua_pushliteral(L, "");
     lua_getmetatable(L, -1);
-    lua_setreadonly(L, -1, true);
+    lua_setreadonly(L, -1, 1);
     lua_pop(L, 1);
 
     // set globals to readonly and activate safeenv since the env is immutable
-    lua_setreadonly(L, LUA_GLOBALSINDEX, true);
-    lua_setsafeenv(L, LUA_GLOBALSINDEX, true);
+    lua_setreadonly(L, LUA_GLOBALSINDEX, 1);
+    lua_setsafeenv(L, LUA_GLOBALSINDEX, 1);
 }
 
 LUALIB_API void luaL_sandboxthread(lua_State* L)
@@ -59,17 +59,18 @@ LUALIB_API void luaL_sandboxthread(lua_State* L)
     lua_newtable(L);
     lua_pushvalue(L, LUA_GLOBALSINDEX);
     lua_setfield(L, -2, "__index");
-    lua_setreadonly(L, -1, true);
+    lua_setreadonly(L, -1, 1);
 
     lua_setmetatable(L, -2);
 
     // we can set safeenv now although it's important to set it to false if code is loaded twice into the thread
     lua_replace(L, LUA_GLOBALSINDEX);
-    lua_setsafeenv(L, LUA_GLOBALSINDEX, true);
+    lua_setsafeenv(L, LUA_GLOBALSINDEX, 1);
 }
 
 static void* l_alloc(lua_State* L, void* ud, void* ptr, size_t osize, size_t nsize)
 {
+    (void)sizeof(L);
     (void)ud;
     (void)osize;
     if (nsize == 0)

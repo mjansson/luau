@@ -12,14 +12,12 @@
 
 #include <string.h>
 
-#include <vector>
-
-void luaV_getimport(lua_State* L, Table* env, TValue* k, uint32_t id, bool propagatenil)
+void luaV_getimport(lua_State* L, Table* env, TValue* k, uint32_t id, int propagatenil)
 {
     int count = id >> 30;
-    int id0 = count > 0 ? int(id >> 20) & 1023 : -1;
-    int id1 = count > 1 ? int(id >> 10) & 1023 : -1;
-    int id2 = count > 2 ? int(id) & 1023 : -1;
+    int id0 = count > 0 ? (int)(id >> 20) & 1023 : -1;
+    int id1 = count > 1 ? (int)(id >> 10) & 1023 : -1;
+    int id2 = count > 2 ? (int)(id) & 1023 : -1;
 
     // allocate a stack slot so that we can do table lookups
     luaD_checkstack(L, 1);
@@ -40,17 +38,47 @@ void luaV_getimport(lua_State* L, Table* env, TValue* k, uint32_t id, bool propa
         luaV_gettable(L, L->top - 1, &k[id2], L->top - 1);
 }
 
-template<typename T>
-static T read(const char* data, size_t size, size_t& offset)
+static uint8_t read_uint8_t(const char* data, size_t size, size_t* offset)
 {
-    T result;
-    memcpy(&result, data + offset, sizeof(T));
-    offset += sizeof(T);
+    (void)sizeof(size);
+    uint8_t result;
+    memcpy(&result, data + *offset, sizeof(uint8_t));
+    *offset += sizeof(uint8_t);
 
     return result;
 }
 
-static unsigned int readVarInt(const char* data, size_t size, size_t& offset)
+static uint32_t read_int32_t(const char* data, size_t size, size_t* offset)
+{
+    (void)sizeof(size);
+    int32_t result;
+    memcpy(&result, data + *offset, sizeof(int32_t));
+    *offset += sizeof(int32_t);
+
+    return result;
+}
+
+static uint32_t read_uint32_t(const char* data, size_t size, size_t* offset)
+{
+    (void)sizeof(size);
+    uint32_t result;
+    memcpy(&result, data + *offset, sizeof(uint32_t));
+    *offset += sizeof(uint32_t);
+
+    return result;
+}
+
+static double read_double(const char* data, size_t size, size_t* offset)
+{
+    (void)sizeof(size);
+    double result;
+    memcpy(&result, data + *offset, sizeof(double));
+    *offset += sizeof(double);
+
+    return result;
+}
+
+static unsigned int readVarInt(const char* data, size_t size, size_t* offset)
 {
     unsigned int result = 0;
     unsigned int shift = 0;
@@ -59,7 +87,7 @@ static unsigned int readVarInt(const char* data, size_t size, size_t& offset)
 
     do
     {
-        byte = read<uint8_t>(data, size, offset);
+        byte = read_uint8_t(data, size, offset);
         result |= (byte & 127) << shift;
         shift += 7;
     } while (byte & 128);
@@ -67,37 +95,38 @@ static unsigned int readVarInt(const char* data, size_t size, size_t& offset)
     return result;
 }
 
-static TString* readString(std::vector<TString*>& strings, const char* data, size_t size, size_t& offset)
+static TString* readString(TString** strings, const char* data, size_t size, size_t* offset)
 {
     unsigned int id = readVarInt(data, size, offset);
 
-    return id == 0 ? NULL : strings[id - 1];
+    return id == 0 ? 0 : strings[id - 1];
+}
+
+typedef struct ResolveImport
+{
+    TValue* k;
+    uint32_t id;
+} ResolveImport;
+
+static void runResolveImport(lua_State* L, void* ud)
+{
+    ResolveImport* self = (ResolveImport*)ud;
+
+    // note: we call getimport with nil propagation which means that accesses to table chains like A.B.C will resolve in nil
+    // this is technically not necessary but it reduces the number of exceptions when loading scripts that rely on getfenv/setfenv for global
+    // injection
+    luaV_getimport(L, hvalue(gt(L)), self->k, self->id, /* propagatenil= */ 1);
 }
 
 static void resolveImportSafe(lua_State* L, Table* env, TValue* k, uint32_t id)
 {
-    struct ResolveImport
-    {
-        TValue* k;
-        uint32_t id;
-
-        static void run(lua_State* L, void* ud)
-        {
-            ResolveImport* self = static_cast<ResolveImport*>(ud);
-
-            // note: we call getimport with nil propagation which means that accesses to table chains like A.B.C will resolve in nil
-            // this is technically not necessary but it reduces the number of exceptions when loading scripts that rely on getfenv/setfenv for global
-            // injection
-            luaV_getimport(L, hvalue(gt(L)), self->k, self->id, /* propagatenil= */ true);
-        }
-    };
-
+    (void)sizeof(env);
     ResolveImport ri = {k, id};
     if (hvalue(gt(L))->safeenv)
     {
         // luaD_pcall will make sure that if any C/Lua calls during import resolution fail, the thread state is restored back
         int oldTop = lua_gettop(L);
-        int status = luaD_pcall(L, &ResolveImport::run, &ri, savestack(L, L->top), 0);
+        int status = luaD_pcall(L, runResolveImport, &ri, savestack(L, L->top), 0);
         LUAU_ASSERT(oldTop + 1 == lua_gettop(L)); // if an error occurred, luaD_pcall saves it on stack
 
         if (status != 0)
@@ -117,7 +146,7 @@ int luau_load(lua_State* L, const char* chunkname, const char* data, size_t size
 {
     size_t offset = 0;
 
-    uint8_t version = read<uint8_t>(data, size, offset);
+    uint8_t version = read_uint8_t(data, size, &offset);
 
     // 0 means the rest of the bytecode is the error message
     if (version == 0 || version != LBC_VERSION)
@@ -126,7 +155,7 @@ int luau_load(lua_State* L, const char* chunkname, const char* data, size_t size
         luaO_chunkid(chunkid, chunkname, LUA_IDSIZE);
 
         if (version == 0)
-            lua_pushfstring(L, "%s%.*s", chunkid, int(size - offset), data + offset);
+            lua_pushfstring(L, "%s%.*s", chunkid, (int)(size - offset), data + offset);
         else
             lua_pushfstring(L, "%s: bytecode version mismatch", chunkid);
         return 1;
@@ -143,37 +172,37 @@ int luau_load(lua_State* L, const char* chunkname, const char* data, size_t size
     TString* source = luaS_new(L, chunkname);
 
     // string table
-    unsigned int stringCount = readVarInt(data, size, offset);
-    std::vector<TString*> strings(stringCount);
+    unsigned int stringCount = readVarInt(data, size, &offset);
+    TString** strings = luaM_new(L, TString*, sizeof(TString*) * stringCount, L->activememcat);
 
     for (unsigned int i = 0; i < stringCount; ++i)
     {
-        unsigned int length = readVarInt(data, size, offset);
+        unsigned int length = readVarInt(data, size, &offset);
 
         strings[i] = luaS_newlstr(L, data + offset, length);
         offset += length;
     }
 
     // proto table
-    unsigned int protoCount = readVarInt(data, size, offset);
-    std::vector<Proto*> protos(protoCount);
+    unsigned int protoCount = readVarInt(data, size, &offset);
+    Proto** protos = luaM_new(L, Proto*, sizeof(Proto*) * protoCount, L->activememcat);
 
     for (unsigned int i = 0; i < protoCount; ++i)
     {
         Proto* p = luaF_newproto(L);
         p->source = source;
 
-        p->maxstacksize = read<uint8_t>(data, size, offset);
-        p->numparams = read<uint8_t>(data, size, offset);
-        p->nups = read<uint8_t>(data, size, offset);
-        p->is_vararg = read<uint8_t>(data, size, offset);
+        p->maxstacksize = read_uint8_t(data, size, &offset);
+        p->numparams = read_uint8_t(data, size, &offset);
+        p->nups = read_uint8_t(data, size, &offset);
+        p->is_vararg = read_uint8_t(data, size, &offset);
 
-        p->sizecode = readVarInt(data, size, offset);
+        p->sizecode = readVarInt(data, size, &offset);
         p->code = luaM_newarray(L, p->sizecode, Instruction, p->memcat);
         for (int j = 0; j < p->sizecode; ++j)
-            p->code[j] = read<uint32_t>(data, size, offset);
+            p->code[j] = read_uint32_t(data, size, &offset);
 
-        p->sizek = readVarInt(data, size, offset);
+        p->sizek = readVarInt(data, size, &offset);
         p->k = luaM_newarray(L, p->sizek, TValue, p->memcat);
 
 #ifdef HARDMEMTESTS
@@ -187,7 +216,7 @@ int luau_load(lua_State* L, const char* chunkname, const char* data, size_t size
 
         for (int j = 0; j < p->sizek; ++j)
         {
-            switch (read<uint8_t>(data, size, offset))
+            switch (read_uint8_t(data, size, &offset))
             {
             case LBC_CONSTANT_NIL:
                 setnilvalue(&p->k[j]);
@@ -195,28 +224,28 @@ int luau_load(lua_State* L, const char* chunkname, const char* data, size_t size
 
             case LBC_CONSTANT_BOOLEAN:
             {
-                uint8_t v = read<uint8_t>(data, size, offset);
+                uint8_t v = read_uint8_t(data, size, &offset);
                 setbvalue(&p->k[j], v);
                 break;
             }
 
             case LBC_CONSTANT_NUMBER:
             {
-                double v = read<double>(data, size, offset);
+                double v = read_double(data, size, &offset);
                 setnvalue(&p->k[j], v);
                 break;
             }
 
             case LBC_CONSTANT_STRING:
             {
-                TString* v = readString(strings, data, size, offset);
+                TString* v = readString(strings, data, size, &offset);
                 setsvalue2n(L, &p->k[j], v);
                 break;
             }
 
             case LBC_CONSTANT_IMPORT:
             {
-                uint32_t iid = read<uint32_t>(data, size, offset);
+                uint32_t iid = read_uint32_t(data, size, &offset);
                 resolveImportSafe(L, envt, p->k, iid);
                 setobj(L, &p->k[j], L->top - 1);
                 L->top--;
@@ -225,11 +254,11 @@ int luau_load(lua_State* L, const char* chunkname, const char* data, size_t size
 
             case LBC_CONSTANT_TABLE:
             {
-                int keys = readVarInt(data, size, offset);
+                int keys = readVarInt(data, size, &offset);
                 Table* h = luaH_new(L, 0, keys);
-                for (int i = 0; i < keys; ++i)
+                for (int ikey = 0; ikey < keys; ++ikey)
                 {
-                    int key = readVarInt(data, size, offset);
+                    int key = readVarInt(data, size, &offset);
                     TValue* val = luaH_set(L, h, &p->k[key]);
                     setnvalue(val, 0.0);
                 }
@@ -239,7 +268,7 @@ int luau_load(lua_State* L, const char* chunkname, const char* data, size_t size
 
             case LBC_CONSTANT_CLOSURE:
             {
-                uint32_t fid = readVarInt(data, size, offset);
+                uint32_t fid = readVarInt(data, size, &offset);
                 Closure* cl = luaF_newLclosure(L, protos[fid]->nups, envt, protos[fid]);
                 cl->preload = (cl->nupvalues > 0);
                 setclvalue(L, &p->k[j], cl);
@@ -251,21 +280,21 @@ int luau_load(lua_State* L, const char* chunkname, const char* data, size_t size
             }
         }
 
-        p->sizep = readVarInt(data, size, offset);
+        p->sizep = readVarInt(data, size, &offset);
         p->p = luaM_newarray(L, p->sizep, Proto*, p->memcat);
         for (int j = 0; j < p->sizep; ++j)
         {
-            uint32_t fid = readVarInt(data, size, offset);
+            uint32_t fid = readVarInt(data, size, &offset);
             p->p[j] = protos[fid];
         }
 
-        p->debugname = readString(strings, data, size, offset);
+        p->debugname = readString(strings, data, size, &offset);
 
-        uint8_t lineinfo = read<uint8_t>(data, size, offset);
+        uint8_t lineinfo = read_uint8_t(data, size, &offset);
 
         if (lineinfo)
         {
-            p->linegaplog2 = read<uint8_t>(data, size, offset);
+            p->linegaplog2 = read_uint8_t(data, size, &offset);
 
             int intervals = ((p->sizecode - 1) >> p->linegaplog2) + 1;
             int absoffset = (p->sizecode + 3) & ~3;
@@ -277,39 +306,39 @@ int luau_load(lua_State* L, const char* chunkname, const char* data, size_t size
             uint8_t lastoffset = 0;
             for (int j = 0; j < p->sizecode; ++j)
             {
-                lastoffset += read<uint8_t>(data, size, offset);
+                lastoffset += read_uint8_t(data, size, &offset);
                 p->lineinfo[j] = lastoffset;
             }
 
             int lastLine = 0;
             for (int j = 0; j < intervals; ++j)
             {
-                lastLine += read<int32_t>(data, size, offset);
+                lastLine += read_int32_t(data, size, &offset);
                 p->abslineinfo[j] = lastLine;
             }
         }
 
-        uint8_t debuginfo = read<uint8_t>(data, size, offset);
+        uint8_t debuginfo = read_uint8_t(data, size, &offset);
 
         if (debuginfo)
         {
-            p->sizelocvars = readVarInt(data, size, offset);
+            p->sizelocvars = readVarInt(data, size, &offset);
             p->locvars = luaM_newarray(L, p->sizelocvars, LocVar, p->memcat);
 
             for (int j = 0; j < p->sizelocvars; ++j)
             {
-                p->locvars[j].varname = readString(strings, data, size, offset);
-                p->locvars[j].startpc = readVarInt(data, size, offset);
-                p->locvars[j].endpc = readVarInt(data, size, offset);
-                p->locvars[j].reg = read<uint8_t>(data, size, offset);
+                p->locvars[j].varname = readString(strings, data, size, &offset);
+                p->locvars[j].startpc = readVarInt(data, size, &offset);
+                p->locvars[j].endpc = readVarInt(data, size, &offset);
+                p->locvars[j].reg = read_uint8_t(data, size, &offset);
             }
 
-            p->sizeupvalues = readVarInt(data, size, offset);
+            p->sizeupvalues = readVarInt(data, size, &offset);
             p->upvalues = luaM_newarray(L, p->sizeupvalues, TString*, p->memcat);
 
             for (int j = 0; j < p->sizeupvalues; ++j)
             {
-                p->upvalues[j] = readString(strings, data, size, offset);
+                p->upvalues[j] = readString(strings, data, size, &offset);
             }
         }
 
@@ -317,12 +346,15 @@ int luau_load(lua_State* L, const char* chunkname, const char* data, size_t size
     }
 
     // "main" proto is pushed to Lua stack
-    uint32_t mainid = readVarInt(data, size, offset);
+    uint32_t mainid = readVarInt(data, size, &offset);
     Proto* main = protos[mainid];
 
     Closure* cl = luaF_newLclosure(L, 0, envt, main);
     setclvalue(L, L->top, cl);
     incr_top(L);
+
+    luaM_free(L, strings, sizeof(TString*) * stringCount, L->activememcat);
+    luaM_free(L, protos, sizeof(Proto*) * protoCount, L->activememcat);
 
     L->global->GCthreshold = GCthreshold;
 

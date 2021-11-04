@@ -39,54 +39,53 @@ static_assert(offsetof(Udata, data) == ABISWITCH(24, 16, 16), "size mismatch for
 static_assert(sizeof(Table) == ABISWITCH(56, 36, 36), "size mismatch for table header");
 static_assert(sizeof(LuaNode) == ABISWITCH(32, 32, 32), "size mismatch for table entry");
 
-const size_t kSizeClasses = LUA_SIZECLASSES;
-const size_t kMaxSmallSize = 512;
-const size_t kPageSize = 16 * 1024 - 24; // slightly under 16KB since that results in less fragmentation due to heap metadata
-const size_t kBlockHeader = sizeof(double) > sizeof(void*) ? sizeof(double) : sizeof(void*); // suitable for aligning double & void* on all platforms
+#define kSizeClasses ((size_t)(LUA_SIZECLASSES))
+#define kMaxSmallSize ((size_t)512)
+#define kPageSize ((size_t)(16 * 1024 - 24)) // slightly under 16KB since that results in less fragmentation due to heap metadata
+#define kBlockHeader ((size_t)(sizeof(double) > sizeof(void*) ? sizeof(double) : sizeof(void*))) // suitable for aligning double & void* on all platforms
 
-struct SizeClassConfig
+static struct SizeClassConfig
 {
     int sizeOfClass[kSizeClasses];
     int8_t classForSize[kMaxSmallSize + 1];
-    int classCount = 0;
+    int classCount;
+} kSizeClassConfig;
 
-    SizeClassConfig()
-    {
-        memset(sizeOfClass, 0, sizeof(sizeOfClass));
-        memset(classForSize, -1, sizeof(classForSize));
+extern void lua_setupmemsizeclassconfig()
+{
+    memset(kSizeClassConfig.sizeOfClass, 0, sizeof(kSizeClassConfig.sizeOfClass));
+    memset(kSizeClassConfig.classForSize, -1, sizeof(kSizeClassConfig.classForSize));
+    kSizeClassConfig.classCount = 0;
 
-        // we use a progressive size class scheme:
-        // - all size classes are aligned by 8b to satisfy pointer alignment requirements
-        // - we first allocate sizes classes in multiples of 8
-        // - after the first cutoff we allocate size classes in multiples of 16
-        // - after the second cutoff we allocate size classes in multiples of 32
-        // this balances internal fragmentation vs external fragmentation
-        for (int size = 8; size < 64; size += 8)
-            sizeOfClass[classCount++] = size;
+    // we use a progressive size class scheme:
+    // - all size classes are aligned by 8b to satisfy pointer alignment requirements
+    // - we first allocate sizes classes in multiples of 8
+    // - after the first cutoff we allocate size classes in multiples of 16
+    // - after the second cutoff we allocate size classes in multiples of 32
+    // this balances internal fragmentation vs external fragmentation
+    for (int size = 8; size < 64; size += 8)
+        kSizeClassConfig.sizeOfClass[kSizeClassConfig.classCount++] = size;
 
-        for (int size = 64; size < 256; size += 16)
-            sizeOfClass[classCount++] = size;
+    for (int size = 64; size < 256; size += 16)
+        kSizeClassConfig.sizeOfClass[kSizeClassConfig.classCount++] = size;
 
-        for (int size = 256; size <= 512; size += 32)
-            sizeOfClass[classCount++] = size;
+    for (int size = 256; size <= 512; size += 32)
+        kSizeClassConfig.sizeOfClass[kSizeClassConfig.classCount++] = size;
 
-        LUAU_ASSERT(size_t(classCount) <= kSizeClasses);
+    LUAU_ASSERT((size_t)(kSizeClassConfig.classCount) <= kSizeClasses);
 
-        // fill the lookup table for all classes
-        for (int klass = 0; klass < classCount; ++klass)
-            classForSize[sizeOfClass[klass]] = int8_t(klass);
+    // fill the lookup table for all classes
+    for (int klass = 0; klass < kSizeClassConfig.classCount; ++klass)
+        kSizeClassConfig.classForSize[kSizeClassConfig.sizeOfClass[klass]] = (int8_t)(klass);
 
-        // fill the gaps in lookup table
-        for (int size = kMaxSmallSize - 1; size >= 0; --size)
-            if (classForSize[size] < 0)
-                classForSize[size] = classForSize[size + 1];
-    }
-};
-
-const SizeClassConfig kSizeClassConfig;
+    // fill the gaps in lookup table
+    for (int size = kMaxSmallSize - 1; size >= 0; --size)
+        if (kSizeClassConfig.classForSize[size] < 0)
+            kSizeClassConfig.classForSize[size] = kSizeClassConfig.classForSize[size + 1];
+}
 
 // size class for a block of size sz
-#define sizeclass(sz) (size_t((sz)-1) < kMaxSmallSize ? kSizeClassConfig.classForSize[sz] : -1)
+#define sizeclass(sz) ((size_t)((sz)-1) < kMaxSmallSize ? kSizeClassConfig.classForSize[sz] : -1)
 
 // metadata for a block is stored in the first pointer of the block
 #define metadata(block) (*(void**)(block))
@@ -109,6 +108,7 @@ const SizeClassConfig kSizeClassConfig;
 ** (any reallocation to an equal or smaller size cannot fail!)
 */
 
+typedef struct lua_Page lua_Page;
 struct lua_Page
 {
     lua_Page* prev;
@@ -189,11 +189,11 @@ static void* luaM_newblock(lua_State* L, int sizeClass)
 
     // slow path: no page in the freelist, allocate a new one
     if (!page)
-        page = luaM_newpage(L, sizeClass);
+        page = luaM_newpage(L, (uint8_t)sizeClass);
 
     LUAU_ASSERT(!page->prev);
     LUAU_ASSERT(page->freeList || page->freeNext >= 0);
-    LUAU_ASSERT(size_t(page->blockSize) == kSizeClassConfig.sizeOfClass[sizeClass] + kBlockHeader);
+    LUAU_ASSERT((size_t)(page->blockSize) == kSizeClassConfig.sizeOfClass[sizeClass] + kBlockHeader);
 
     void* block;
 
@@ -240,7 +240,7 @@ static void luaM_freeblock(lua_State* L, int sizeClass, void* block)
 
     lua_Page* page = (lua_Page*)metadata(block);
     LUAU_ASSERT(page && page->busyBlocks > 0);
-    LUAU_ASSERT(size_t(page->blockSize) == kSizeClassConfig.sizeOfClass[sizeClass] + kBlockHeader);
+    LUAU_ASSERT((size_t)(page->blockSize) == kSizeClassConfig.sizeOfClass[sizeClass] + kBlockHeader);
 
     // if the page wasn't in the page free list, it should be now since it got a block!
     if (!page->freeList && page->freeNext < 0)
@@ -264,7 +264,7 @@ static void luaM_freeblock(lua_State* L, int sizeClass, void* block)
 
     // if it's the last block in the page, we don't need the page
     if (page->busyBlocks == 0)
-        luaM_freepage(L, page, sizeClass);
+        luaM_freepage(L, page, (uint8_t)sizeClass);
 }
 
 /*

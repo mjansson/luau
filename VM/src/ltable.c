@@ -24,24 +24,32 @@
 
 #include <string.h>
 
-LUAU_FASTFLAGVARIABLE(LuauArrayBoundary, false)
+#ifdef _MSC_VER
+#pragma warning(disable: 4706)
+#pragma warning(disable: 4709)
+#endif
+
+/* TODO: C++
+LUAU_FASTFLAGVARIABLE(LuauArrayBoundary, false)*/
 
 // max size of both array and hash part is 2^MAXBITS
 #define MAXBITS 26
 #define MAXSIZE (1 << MAXBITS)
 
 // TKey is bitpacked for memory efficiency so we need to validate bit counts for worst case
-static_assert(TKey{{NULL}, 0, LUA_TDEADKEY, 0}.tt == LUA_TDEADKEY, "not enough bits for tt");
-static_assert(TKey{{NULL}, 0, LUA_TNIL, MAXSIZE - 1}.next == MAXSIZE - 1, "not enough bits for next");
-static_assert(TKey{{NULL}, 0, LUA_TNIL, -(MAXSIZE - 1)}.next == -(MAXSIZE - 1), "not enough bits for next");
+/* TODO: C++
+_Static_assert(TKey{{0}, 0, LUA_TDEADKEY, 0}.tt == LUA_TDEADKEY, "not enough bits for tt");
+_Static_assert(TKey{{0}, 0, LUA_TNIL, MAXSIZE - 1}.next == MAXSIZE - 1, "not enough bits for next");
+_Static_assert(TKey{{0}, 0, LUA_TNIL, -(MAXSIZE - 1)}.next == -(MAXSIZE - 1), "not enough bits for next");
+*/
 
 // reset cache of absent metamethods, cache is updated in luaT_gettm
 #define invalidateTMcache(t) t->flags = 0
 
 // empty hash data points to dummynode so that we can always dereference it
 const LuaNode luaH_dummynode = {
-    {{NULL}, 0, LUA_TNIL},   /* value */
-    {{NULL}, 0, LUA_TNIL, 0} /* key */
+    {{0}, 0, LUA_TNIL},   /* value */
+    {{0}, 0, LUA_TNIL, 0} /* key */
 };
 
 #define dummynode (&luaH_dummynode)
@@ -55,7 +63,7 @@ const LuaNode luaH_dummynode = {
 static LuaNode* hashpointer(const Table* t, const void* p)
 {
     // we discard the high 32-bit portion of the pointer on 64-bit platforms as it doesn't carry much entropy anyway
-    unsigned int h = unsigned(uintptr_t(p));
+    unsigned int h = (unsigned)((uintptr_t)p);
 
     // MurmurHash3 32-bit finalizer
     h ^= h >> 16;
@@ -213,9 +221,9 @@ int luaH_next(lua_State* L, Table* t, StkId key)
 */
 
 #define maybesetaboundary(t, boundary) \
-    { \
-        if (FFlag::LuauArrayBoundary && t->aboundary <= 0) \
-            t->aboundary = -int(boundary); \
+    { /* TODO: C++ */ \
+        /*if (FFlag::LuauArrayBoundary && t->aboundary <= 0)*/ \
+        /*    t->aboundary = -int(boundary); */ \
     }
 
 #define getaboundary(t) (t->aboundary < 0 ? -t->aboundary : t->sizearray)
@@ -380,7 +388,7 @@ static void resize(lua_State* L, Table* t, int nasize, int nhsize)
         }
     }
     if (nold != dummynode)
-        luaM_freearray(L, nold, twoto(oldhsize), LuaNode, t->memcat); /* free old array */
+        luaM_freearray(L, nold, (uint64_t)twoto(oldhsize), LuaNode, t->memcat); /* free old array */
 }
 
 void luaH_resizearray(lua_State* L, Table* t, int nasize)
@@ -420,9 +428,9 @@ Table* luaH_new(lua_State* L, int narray, int nhash)
 {
     Table* t = luaM_new(L, Table, sizeof(Table), L->activememcat);
     luaC_link(L, t, LUA_TTABLE);
-    t->metatable = NULL;
+    t->metatable = 0;
     t->flags = cast_byte(~0);
-    t->array = NULL;
+    t->array = 0;
     t->sizearray = 0;
     t->lastfree = 0;
     t->lsizenode = 0;
@@ -440,7 +448,7 @@ Table* luaH_new(lua_State* L, int narray, int nhash)
 void luaH_free(lua_State* L, Table* t)
 {
     if (t->node != dummynode)
-        luaM_freearray(L, t->node, sizenode(t), LuaNode, t->memcat);
+        luaM_freearray(L, t->node, (uint64_t)sizenode(t), LuaNode, t->memcat);
     luaM_freearray(L, t->array, t->sizearray, TValue, t->memcat);
     luaM_free(L, t, sizeof(Table), t->memcat);
 }
@@ -455,7 +463,7 @@ static LuaNode* getfreepos(Table* t)
         if (ttisnil(gkey(n)))
             return n;
     }
-    return NULL; /* could not find a free place */
+    return 0; /* could not find a free place */
 }
 
 /*
@@ -472,7 +480,7 @@ static TValue* newkey(lua_State* L, Table* t, const TValue* key)
     {
         LuaNode* othern;
         LuaNode* n = getfreepos(t); /* get a free place */
-        if (n == NULL)
+        if (n == 0)
         {                               /* cannot find a free place? */
             rehash(L, t, key);          /* grow table */
             return luaH_set(L, t, key); /* re-insert key into grown table */
@@ -697,17 +705,18 @@ int luaH_getn(Table* t)
 {
     int boundary = getaboundary(t);
 
+    /* TODO: C++
     if (FFlag::LuauArrayBoundary && boundary > 0)
     {
         if (!ttisnil(&t->array[t->sizearray - 1]) && t->node == dummynode)
-            return t->sizearray; /* fast-path: the end of the array in `t' already refers to a boundary */
+            return t->sizearray; // fast-path: the end of the array in `t' already refers to a boundary
         if (boundary < t->sizearray && !ttisnil(&t->array[boundary - 1]) && ttisnil(&t->array[boundary]))
-            return boundary; /* fast-path: boundary already refers to a boundary in `t' */
+            return boundary; // fast-path: boundary already refers to a boundary in `t'
 
         int foundboundary = updateaboundary(t, boundary);
         if (foundboundary > 0)
             return foundboundary;
-    }
+    }*/
 
     int j = t->sizearray;
 
@@ -717,12 +726,13 @@ int luaH_getn(Table* t)
         // note that clang is cmov-shy on cmovs around memory operands, so it will compile this to a branchy loop.
         TValue* base = t->array;
         int rest = j;
-        while (int half = rest >> 1)
+        int half;
+        while ((half = rest >> 1))
         {
             base = ttisnil(&base[half]) ? base : base + half;
             rest -= half;
         }
-        int boundary = !ttisnil(base) + int(base - t->array);
+        boundary = !ttisnil(base) + (int)(base - t->array);
         maybesetaboundary(t, boundary);
         return boundary;
     }
@@ -739,7 +749,7 @@ Table* luaH_clone(lua_State* L, Table* tt)
     luaC_link(L, t, LUA_TTABLE);
     t->metatable = tt->metatable;
     t->flags = tt->flags;
-    t->array = NULL;
+    t->array = 0;
     t->sizearray = 0;
     t->lsizenode = 0;
     t->nodemask8 = 0;

@@ -17,9 +17,9 @@ static uint32_t pcg32_random(uint64_t* state)
 {
     uint64_t oldstate = *state;
     *state = oldstate * 6364136223846793005ULL + (PCG32_INC | 1);
-    uint32_t xorshifted = uint32_t(((oldstate >> 18u) ^ oldstate) >> 27u);
-    uint32_t rot = uint32_t(oldstate >> 59u);
-    return (xorshifted >> rot) | (xorshifted << ((-int32_t(rot)) & 31));
+    uint32_t xorshifted = (uint32_t)(((oldstate >> 18u) ^ oldstate) >> 27u);
+    uint32_t rot = (uint32_t)(oldstate >> 59u);
+    return (xorshifted >> rot) | (xorshifted << ((-(int32_t)(rot)) & 31));
 }
 
 static void pcg32_seed(uint64_t* state, uint64_t seed)
@@ -234,7 +234,7 @@ static int math_random(lua_State* L)
         // See http://mumble.net/~campbell/tmp/random_real.c for details on generating doubles from integer ranges.
         uint32_t rl = pcg32_random(&g->rngstate);
         uint32_t rh = pcg32_random(&g->rngstate);
-        double rd = ldexp(double(rl | (uint64_t(rh) << 32)), -64);
+        double rd = ldexp((double)(rl | ((uint64_t)(rh) << 32)), -64);
         lua_pushnumber(L, rd); /* number between 0 and 1 */
         break;
     }
@@ -243,8 +243,8 @@ static int math_random(lua_State* L)
         int u = luaL_checkinteger(L, 1);
         luaL_argcheck(L, 1 <= u, 1, "interval is empty");
 
-        uint64_t x = uint64_t(u) * pcg32_random(&g->rngstate);
-        int r = int(1 + (x >> 32));
+        uint64_t x = (uint64_t)(u) * pcg32_random(&g->rngstate);
+        int r = (int)(1 + (x >> 32));
         lua_pushinteger(L, r); /* int between 1 and `u' */
         break;
     }
@@ -254,10 +254,10 @@ static int math_random(lua_State* L)
         int u = luaL_checkinteger(L, 2);
         luaL_argcheck(L, l <= u, 2, "interval is empty");
 
-        uint32_t ul = uint32_t(u) - uint32_t(l);
+        uint32_t ul = (uint32_t)(u) - (uint32_t)(l);
         luaL_argcheck(L, ul < UINT_MAX, 2, "interval is too large"); // -INT_MIN..INT_MAX interval can result in integer overflow
-        uint64_t x = uint64_t(ul + 1) * pcg32_random(&g->rngstate);
-        int r = int(l + (x >> 32));
+        uint64_t x = (uint64_t)(ul + 1) * pcg32_random(&g->rngstate);
+        int r = (int)(l + (x >> 32));
         lua_pushinteger(L, r); /* int between `l' and `u' */
         break;
     }
@@ -320,9 +320,9 @@ static float perlin(float x, float y, float z)
     float yflr = floorf(y);
     float zflr = floorf(z);
 
-    int xi = int(xflr) & 255;
-    int yi = int(yflr) & 255;
-    int zi = int(zflr) & 255;
+    int xi = (int)(xflr) & 255;
+    int yi = (int)(yflr) & 255;
+    int zi = (int)(zflr) & 255;
 
     float xf = x - xflr;
     float yf = y - yflr;
@@ -431,7 +431,7 @@ static const luaL_Reg mathlib[] = {
 */
 LUALIB_API int luaopen_math(lua_State* L)
 {
-    uint64_t seed = uintptr_t(L);
+    uint64_t seed = (uintptr_t)(L);
     seed ^= time(NULL);
     seed ^= clock();
 

@@ -1,5 +1,9 @@
 // This file is part of the Luau programming language and is licensed under MIT License; see LICENSE.txt for details
 // This code is based on Lua 5.x implementation licensed under MIT License; see lua_LICENSE.txt for details
+
+#undef _CRT_SECURE_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS 1
+
 #include "lobject.h"
 
 #include "lstate.h"
@@ -12,8 +16,6 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-
-
 
 const TValue luaO_nilobject_ = {{NULL}, LUA_TNIL};
 
@@ -59,7 +61,7 @@ int luaO_rawequalObj(const TValue* t1, const TValue* t2)
 
 int luaO_rawequalKey(const TKey* t1, const TValue* t2)
 {
-    if (ttype(t1) != ttype(t2))
+    if (ttype(t1) != (unsigned)ttype(t2))
         return 0;
     else
         switch (ttype(t1))
