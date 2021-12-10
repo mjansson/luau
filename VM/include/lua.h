@@ -21,6 +21,7 @@
 #define LUA_ENVIRONINDEX (-10001)
 #define LUA_GLOBALSINDEX (-10002)
 #define lua_upvalueindex(i) (LUA_GLOBALSINDEX - (i))
+#define lua_ispseudo(i) ((i) <= LUA_REGISTRYINDEX)
 
 /* thread status; 0 is OK */
 enum lua_Status
@@ -102,10 +103,13 @@ LUA_API lua_State* lua_newstate(lua_Alloc f, void* ud);
 LUA_API void lua_close(lua_State* L);
 LUA_API lua_State* lua_newthread(lua_State* L);
 LUA_API lua_State* lua_mainthread(lua_State* L);
+LUA_API void lua_resetthread(lua_State* L);
+LUA_API int lua_isthreadreset(lua_State* L);
 
 /*
 ** basic stack manipulation
 */
+LUA_API int lua_absindex(lua_State* L, int idx);
 LUA_API int lua_gettop(lua_State* L);
 LUA_API void lua_settop(lua_State* L, int idx);
 LUA_API void lua_pushvalue(lua_State* L, int idx);
@@ -157,15 +161,23 @@ LUA_API void lua_pushnil(lua_State* L);
 LUA_API void lua_pushnumber(lua_State* L, double n);
 LUA_API void lua_pushinteger(lua_State* L, int n);
 LUA_API void lua_pushunsigned(lua_State* L, unsigned n);
+#if LUA_VECTOR_SIZE == 4
+LUA_API void lua_pushvector(lua_State* L, float x, float y, float z, float w);
+#else
 LUA_API void lua_pushvector(lua_State* L, float x, float y, float z);
+#endif
 LUA_API void lua_pushlstring(lua_State* L, const char* s, size_t l);
 LUA_API void lua_pushstring(lua_State* L, const char* s);
 LUA_API const char* lua_pushvfstring(lua_State* L, const char* fmt, va_list argp);
 LUA_API LUA_PRINTF_ATTR(2, 3) const char* lua_pushfstringL(lua_State* L, const char* fmt, ...);
+<<<<<<< HEAD
 LUA_API void lua_pushcfunction(
     lua_State* L, lua_CFunction fn);
 LUA_API void lua_pushcfunction_full(
     lua_State* L, lua_CFunction fn, const char* debugname, int nup, lua_Continuation cont);
+=======
+LUA_API void lua_pushcclosurek(lua_State* L, lua_CFunction fn, const char* debugname, int nup, lua_Continuation cont);
+>>>>>>> upstream/master
 LUA_API void lua_pushboolean(lua_State* L, int b);
 LUA_API void lua_pushlightuserdata(lua_State* L, void* p);
 LUA_API int lua_pushthread(lua_State* L);
@@ -180,11 +192,17 @@ LUA_API void lua_rawget(lua_State* L, int idx);
 LUA_API void lua_rawgeti(lua_State* L, int idx, int n);
 LUA_API void lua_createtable(lua_State* L, int narr, int nrec);
 
+<<<<<<< HEAD
 LUA_API void lua_setreadonly(lua_State* L, int idx, int value);
 LUA_API int lua_getreadonly(lua_State* L, int idx);
 LUA_API void lua_setsafeenv(lua_State* L, int idx, int value);
+=======
+LUA_API void lua_setreadonly(lua_State* L, int idx, int enabled);
+LUA_API int lua_getreadonly(lua_State* L, int idx);
+LUA_API void lua_setsafeenv(lua_State* L, int idx, int enabled);
+>>>>>>> upstream/master
 
-LUA_API void* lua_newuserdata(lua_State* L, size_t sz, int tag);
+LUA_API void* lua_newuserdatatagged(lua_State* L, size_t sz, int tag);
 LUA_API void* lua_newuserdatadtor(lua_State* L, size_t sz, void (*dtor)(void*));
 LUA_API int lua_getmetatable(lua_State* L, int objindex);
 LUA_API void lua_getfenv(lua_State* L, int idx);
@@ -215,6 +233,8 @@ LUA_API int lua_resume(lua_State* L, lua_State* from, int narg);
 LUA_API int lua_resumeerror(lua_State* L, lua_State* from);
 LUA_API int lua_status(lua_State* L);
 LUA_API int lua_isyieldable(lua_State* L);
+LUA_API void* lua_getthreaddata(lua_State* L);
+LUA_API void lua_setthreaddata(lua_State* L, void* data);
 
 /*
 ** garbage-collection function and options
@@ -226,6 +246,7 @@ enum lua_GCOp
     LUA_GCRESTART,
     LUA_GCCOLLECT,
     LUA_GCCOUNT,
+    LUA_GCCOUNTB,
     LUA_GCISRUNNING,
 
     // garbage collection is handled by 'assists' that perform some amount of GC work matching pace of allocation
@@ -280,6 +301,7 @@ LUA_API void lua_unref(lua_State* L, int ref);
 #define lua_pop(L, n) lua_settop(L, -(n)-1)
 
 #define lua_newtable(L) lua_createtable(L, 0, 0)
+#define lua_newuserdata(L, s) lua_newuserdatatagged(L, s, 0)
 
 #define lua_strlen(L, i) lua_objlen(L, (i))
 
@@ -288,11 +310,14 @@ LUA_API void lua_unref(lua_State* L, int ref);
 #define lua_islightuserdata(L, n) (lua_type(L, (n)) == LUA_TLIGHTUSERDATA)
 #define lua_isnil(L, n) (lua_type(L, (n)) == LUA_TNIL)
 #define lua_isboolean(L, n) (lua_type(L, (n)) == LUA_TBOOLEAN)
+#define lua_isvector(L, n) (lua_type(L, (n)) == LUA_TVECTOR)
 #define lua_isthread(L, n) (lua_type(L, (n)) == LUA_TTHREAD)
 #define lua_isnone(L, n) (lua_type(L, (n)) == LUA_TNONE)
 #define lua_isnoneornil(L, n) (lua_type(L, (n)) <= LUA_TNIL)
 
 #define lua_pushliteral(L, s) lua_pushlstring(L, "" s, (sizeof(s) / sizeof(char)) - 1)
+#define lua_pushcfunction(L, fn, debugname) lua_pushcclosurek(L, fn, debugname, 0, NULL)
+#define lua_pushcclosure(L, fn, debugname, nup) lua_pushcclosurek(L, fn, debugname, nup, NULL)
 
 #define lua_setglobal(L, s) lua_setfield(L, LUA_GLOBALSINDEX, (s))
 #define lua_getglobal(L, s) lua_getfield(L, LUA_GLOBALSINDEX, (s))
@@ -319,8 +344,13 @@ LUA_API const char* lua_setlocal(lua_State* L, int level, int n);
 LUA_API const char* lua_getupvalue(lua_State* L, int funcindex, int n);
 LUA_API const char* lua_setupvalue(lua_State* L, int funcindex, int n);
 
+<<<<<<< HEAD
 LUA_API void lua_singlestep(lua_State* L, int singlestep);
 LUA_API void lua_breakpoint(lua_State* L, int funcindex, int line, int enable);
+=======
+LUA_API void lua_singlestep(lua_State* L, int enabled);
+LUA_API void lua_breakpoint(lua_State* L, int funcindex, int line, int enabled);
+>>>>>>> upstream/master
 
 /* Warning: this function is not thread-safe since it stores the result in a shared global array! Only use for debugging. */
 LUA_API const char* lua_debugtrace(lua_State* L);
@@ -348,6 +378,8 @@ struct lua_Debug
  * can only be changed when the VM is not running any code */
 typedef struct lua_Callbacks
 {
+    void* userdata; /* arbitrary userdata pointer that is never overwritten by Luau */
+
     void (*interrupt)(lua_State* L, int gc);  /* gets called at safepoints (loop back edges, call/ret, gc) if set */
     void (*panic)(lua_State* L, int errcode); /* gets called when an unprotected error is raised (if longjmp is used) */
 
@@ -358,7 +390,12 @@ typedef struct lua_Callbacks
     void (*debugstep)(lua_State* L, lua_Debug* ar);      /* gets called after each instruction in single step mode */
     void (*debuginterrupt)(lua_State* L, lua_Debug* ar); /* gets called when thread execution is interrupted by break in another thread */
     void (*debugprotectederror)(lua_State* L);           /* gets called when protected call results in an error */
+<<<<<<< HEAD
 } lua_Callbacks;
+=======
+};
+typedef struct lua_Callbacks lua_Callbacks;
+>>>>>>> upstream/master
 
 LUA_API lua_Callbacks* lua_callbacks(lua_State* L);
 

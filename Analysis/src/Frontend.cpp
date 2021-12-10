@@ -1,9 +1,12 @@
 // This file is part of the Luau programming language and is licensed under MIT License; see LICENSE.txt for details
 #include "Luau/Frontend.h"
 
+#include "Luau/Common.h"
 #include "Luau/Config.h"
 #include "Luau/FileResolver.h"
+#include "Luau/Scope.h"
 #include "Luau/StringUtils.h"
+#include "Luau/TimeTrace.h"
 #include "Luau/TypeInfer.h"
 #include "Luau/Variant.h"
 #include "Luau/Common.h"
@@ -15,9 +18,6 @@
 LUAU_FASTFLAG(LuauInferInNoCheckMode)
 LUAU_FASTFLAGVARIABLE(LuauTypeCheckTwice, false)
 LUAU_FASTFLAGVARIABLE(LuauKnowsTheDataModel3, false)
-LUAU_FASTFLAGVARIABLE(LuauSecondTypecheckKnowsTheDataModel, false)
-LUAU_FASTFLAGVARIABLE(LuauResolveModuleNameWithoutACurrentModule, false)
-LUAU_FASTFLAG(LuauTraceRequireLookupChild)
 LUAU_FASTFLAGVARIABLE(LuauPersistDefinitionFileTypes, false)
 
 namespace Luau
@@ -69,6 +69,8 @@ static void generateDocumentationSymbols(TypeId ty, const std::string& rootName)
 
 LoadDefinitionFileResult loadDefinitionFile(TypeChecker& typeChecker, ScopePtr targetScope, std::string_view source, const std::string& packageName)
 {
+    LUAU_TIMETRACE_SCOPE("loadDefinitionFile", "Frontend");
+
     Luau::Allocator allocator;
     Luau::AstNameTable names(allocator);
 
@@ -91,10 +93,11 @@ LoadDefinitionFileResult loadDefinitionFile(TypeChecker& typeChecker, ScopePtr t
 
     SeenTypes seenTypes;
     SeenTypePacks seenTypePacks;
+    CloneState cloneState;
 
     for (const auto& [name, ty] : checkedModule->declaredGlobals)
     {
-        TypeId globalTy = clone(ty, typeChecker.globalTypes, seenTypes, seenTypePacks);
+        TypeId globalTy = clone(ty, typeChecker.globalTypes, seenTypes, seenTypePacks, cloneState);
         std::string documentationSymbol = packageName + "/global/" + name;
         generateDocumentationSymbols(globalTy, documentationSymbol);
         targetScope->bindings[typeChecker.globalNames.names->getOrAdd(name.c_str())] = {globalTy, Location(), false, {}, documentationSymbol};
@@ -105,7 +108,7 @@ LoadDefinitionFileResult loadDefinitionFile(TypeChecker& typeChecker, ScopePtr t
 
     for (const auto& [name, ty] : checkedModule->getModuleScope()->exportedTypeBindings)
     {
-        TypeFun globalTy = clone(ty, typeChecker.globalTypes, seenTypes, seenTypePacks);
+        TypeFun globalTy = clone(ty, typeChecker.globalTypes, seenTypes, seenTypePacks, cloneState);
         std::string documentationSymbol = packageName + "/globaltype/" + name;
         generateDocumentationSymbols(globalTy.type, documentationSymbol);
         targetScope->exportedTypeBindings[name] = globalTy;
@@ -242,7 +245,7 @@ struct RequireCycle
 // Note that this is O(V^2) for a fully connected graph and produces O(V) paths of length O(V)
 // However, when the graph is acyclic, this is O(V), as well as when only the first cycle is needed (stopAtFirst=true)
 std::vector<RequireCycle> getRequireCycles(
-    const std::unordered_map<ModuleName, SourceNode>& sourceNodes, const SourceNode* start, bool stopAtFirst = false)
+    const FileResolver* resolver, const std::unordered_map<ModuleName, SourceNode>& sourceNodes, const SourceNode* start, bool stopAtFirst = false)
 {
     std::vector<RequireCycle> result;
 
@@ -276,9 +279,9 @@ std::vector<RequireCycle> getRequireCycles(
                 if (top == start)
                 {
                     for (const SourceNode* node : path)
-                        cycle.push_back(node->name);
+                        cycle.push_back(resolver->getHumanReadableModuleName(node->name));
 
-                    cycle.push_back(top->name);
+                    cycle.push_back(resolver->getHumanReadableModuleName(top->name));
                     break;
                 }
             }
@@ -350,6 +353,9 @@ FrontendModuleResolver::FrontendModuleResolver(Frontend* frontend)
 
 CheckResult Frontend::check(const ModuleName& name)
 {
+    LUAU_TIMETRACE_SCOPE("Frontend::check", "Frontend");
+    LUAU_TIMETRACE_ARGUMENT("name", name.c_str());
+
     CheckResult checkResult;
 
     auto it = sourceNodes.find(name);
@@ -395,7 +401,7 @@ CheckResult Frontend::check(const ModuleName& name)
         // however, for now getRequireCycles isn't expensive in practice on the cases we care about, and long term
         // all correct programs must be acyclic so this code triggers rarely
         if (cycleDetected)
-            requireCycles = getRequireCycles(sourceNodes, &sourceNode, mode == Mode::NoCheck);
+            requireCycles = getRequireCycles(fileResolver, sourceNodes, &sourceNode, mode == Mode::NoCheck);
 
         // This is used by the type checker to replace the resulting type of cyclic modules with any
         sourceModule.cyclic = !requireCycles.empty();
@@ -405,7 +411,7 @@ CheckResult Frontend::check(const ModuleName& name)
         // If we're typechecking twice, we do so.
         // The second typecheck is always in strict mode with DM awareness
         // to provide better typen information for IDE features.
-        if (options.typecheckTwice && FFlag::LuauSecondTypecheckKnowsTheDataModel)
+        if (options.typecheckTwice)
         {
             ModulePtr moduleForAutocomplete = typeCheckerForAutocomplete.check(sourceModule, Mode::Strict);
             moduleResolverForAutocomplete.modules[moduleName] = moduleForAutocomplete;
@@ -419,15 +425,16 @@ CheckResult Frontend::check(const ModuleName& name)
 
             SeenTypes seenTypes;
             SeenTypePacks seenTypePacks;
+            CloneState cloneState;
 
             for (const auto& [expr, strictTy] : strictModule->astTypes)
-                module->astTypes[expr] = clone(strictTy, module->interfaceTypes, seenTypes, seenTypePacks);
+                module->astTypes[expr] = clone(strictTy, module->interfaceTypes, seenTypes, seenTypePacks, cloneState);
 
             for (const auto& [expr, strictTy] : strictModule->astOriginalCallTypes)
-                module->astOriginalCallTypes[expr] = clone(strictTy, module->interfaceTypes, seenTypes, seenTypePacks);
+                module->astOriginalCallTypes[expr] = clone(strictTy, module->interfaceTypes, seenTypes, seenTypePacks, cloneState);
 
             for (const auto& [expr, strictTy] : strictModule->astExpectedTypes)
-                module->astExpectedTypes[expr] = clone(strictTy, module->interfaceTypes, seenTypes, seenTypePacks);
+                module->astExpectedTypes[expr] = clone(strictTy, module->interfaceTypes, seenTypes, seenTypePacks, cloneState);
         }
 
         stats.timeCheck += getTimestamp() - timestamp;
@@ -449,6 +456,7 @@ CheckResult Frontend::check(const ModuleName& name)
             module->astTypes.clear();
             module->astExpectedTypes.clear();
             module->astOriginalCallTypes.clear();
+            module->scopes.resize(1);
         }
 
         if (mode != Mode::NoCheck)
@@ -479,6 +487,9 @@ CheckResult Frontend::check(const ModuleName& name)
 
 bool Frontend::parseGraph(std::vector<ModuleName>& buildQueue, CheckResult& checkResult, const ModuleName& root)
 {
+    LUAU_TIMETRACE_SCOPE("Frontend::parseGraph", "Frontend");
+    LUAU_TIMETRACE_ARGUMENT("root", root.c_str());
+
     // https://en.wikipedia.org/wiki/Topological_sorting#Depth-first_search
     enum Mark
     {
@@ -597,6 +608,9 @@ ScopePtr Frontend::getModuleEnvironment(const SourceModule& module, const Config
 
 LintResult Frontend::lint(const ModuleName& name, std::optional<Luau::LintOptions> enabledLintWarnings)
 {
+    LUAU_TIMETRACE_SCOPE("Frontend::lint", "Frontend");
+    LUAU_TIMETRACE_ARGUMENT("name", name.c_str());
+
     CheckResult checkResult;
     auto [_sourceNode, sourceModule] = getSourceNode(checkResult, name);
 
@@ -608,6 +622,8 @@ LintResult Frontend::lint(const ModuleName& name, std::optional<Luau::LintOption
 
 std::pair<SourceModule, LintResult> Frontend::lintFragment(std::string_view source, std::optional<Luau::LintOptions> enabledLintWarnings)
 {
+    LUAU_TIMETRACE_SCOPE("Frontend::lintFragment", "Frontend");
+
     const Config& config = configResolver->getConfig("");
 
     SourceModule sourceModule = parse(ModuleName{}, source, config.parseOptions);
@@ -627,6 +643,9 @@ std::pair<SourceModule, LintResult> Frontend::lintFragment(std::string_view sour
 
 CheckResult Frontend::check(const SourceModule& module)
 {
+    LUAU_TIMETRACE_SCOPE("Frontend::check", "Frontend");
+    LUAU_TIMETRACE_ARGUMENT("module", module.name.c_str());
+
     const Config& config = configResolver->getConfig(module.name);
 
     Mode mode = module.mode.value_or(config.mode);
@@ -648,6 +667,9 @@ CheckResult Frontend::check(const SourceModule& module)
 
 LintResult Frontend::lint(const SourceModule& module, std::optional<Luau::LintOptions> enabledLintWarnings)
 {
+    LUAU_TIMETRACE_SCOPE("Frontend::lint", "Frontend");
+    LUAU_TIMETRACE_ARGUMENT("module", module.name.c_str());
+
     const Config& config = configResolver->getConfig(module.name);
 
     LintOptions options = enabledLintWarnings.value_or(config.enabledLint);
@@ -746,6 +768,9 @@ const SourceModule* Frontend::getSourceModule(const ModuleName& moduleName) cons
 // Read AST into sourceModules if necessary.  Trace require()s.  Report parse errors.
 std::pair<SourceNode*, SourceModule*> Frontend::getSourceNode(CheckResult& checkResult, const ModuleName& name)
 {
+    LUAU_TIMETRACE_SCOPE("Frontend::getSourceNode", "Frontend");
+    LUAU_TIMETRACE_ARGUMENT("name", name.c_str());
+
     auto it = sourceNodes.find(name);
     if (it != sourceNodes.end() && !it->second.dirty)
     {
@@ -815,6 +840,9 @@ std::pair<SourceNode*, SourceModule*> Frontend::getSourceNode(CheckResult& check
  */
 SourceModule Frontend::parse(const ModuleName& name, std::string_view src, const ParseOptions& parseOptions)
 {
+    LUAU_TIMETRACE_SCOPE("Frontend::parse", "Frontend");
+    LUAU_TIMETRACE_ARGUMENT("name", name.c_str());
+
     SourceModule sourceModule;
 
     double timestamp = getTimestamp();
@@ -856,28 +884,16 @@ std::optional<ModuleInfo> FrontendModuleResolver::resolveModuleInfo(const Module
         // If we can't find the current module name, that's because we bypassed the frontend's initializer
         // and called typeChecker.check directly. (This is done by autocompleteSource, for example).
         // In that case, requires will always fail.
-        if (FFlag::LuauResolveModuleNameWithoutACurrentModule)
-            return std::nullopt;
-        else
-            throw std::runtime_error("Frontend::resolveModuleName: Unknown currentModuleName '" + currentModuleName + "'");
+        return std::nullopt;
     }
 
     const auto& exprs = it->second.exprs;
 
-    const ModuleName* relativeName = exprs.find(&pathExpr);
-    if (!relativeName || relativeName->empty())
+    const ModuleInfo* info = exprs.find(&pathExpr);
+    if (!info)
         return std::nullopt;
 
-    if (FFlag::LuauTraceRequireLookupChild)
-    {
-        const bool* optional = it->second.optional.find(&pathExpr);
-
-        return {{*relativeName, optional ? *optional : false}};
-    }
-    else
-    {
-        return {{*relativeName, false}};
-    }
+    return *info;
 }
 
 const ModulePtr FrontendModuleResolver::getModule(const ModuleName& moduleName) const
@@ -891,12 +907,12 @@ const ModulePtr FrontendModuleResolver::getModule(const ModuleName& moduleName) 
 
 bool FrontendModuleResolver::moduleExists(const ModuleName& moduleName) const
 {
-    return frontend->fileResolver->moduleExists(moduleName);
+    return frontend->sourceNodes.count(moduleName) != 0;
 }
 
 std::string FrontendModuleResolver::getHumanReadableModuleName(const ModuleName& moduleName) const
 {
-    return frontend->fileResolver->getHumanReadableModuleName_(moduleName).value_or(moduleName);
+    return frontend->fileResolver->getHumanReadableModuleName(moduleName);
 }
 
 ScopePtr Frontend::addEnvironment(const std::string& environmentName)

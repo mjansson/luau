@@ -78,9 +78,15 @@ void unfreeze(TypeArena& arena);
 using SeenTypes = std::unordered_map<TypeId, TypeId>;
 using SeenTypePacks = std::unordered_map<TypePackId, TypePackId>;
 
-TypePackId clone(TypePackId tp, TypeArena& dest, SeenTypes& seenTypes, SeenTypePacks& seenTypePacks, bool* encounteredFreeType = nullptr);
-TypeId clone(TypeId tp, TypeArena& dest, SeenTypes& seenTypes, SeenTypePacks& seenTypePacks, bool* encounteredFreeType = nullptr);
-TypeFun clone(const TypeFun& typeFun, TypeArena& dest, SeenTypes& seenTypes, SeenTypePacks& seenTypePacks, bool* encounteredFreeType = nullptr);
+struct CloneState
+{
+    int recursionCount = 0;
+    bool encounteredFreeType = false;
+};
+
+TypePackId clone(TypePackId tp, TypeArena& dest, SeenTypes& seenTypes, SeenTypePacks& seenTypePacks, CloneState& cloneState);
+TypeId clone(TypeId tp, TypeArena& dest, SeenTypes& seenTypes, SeenTypePacks& seenTypePacks, CloneState& cloneState);
+TypeFun clone(const TypeFun& typeFun, TypeArena& dest, SeenTypes& seenTypes, SeenTypePacks& seenTypePacks, CloneState& cloneState);
 
 struct Module
 {
@@ -90,10 +96,12 @@ struct Module
     TypeArena internalTypes;
 
     std::vector<std::pair<Location, ScopePtr>> scopes; // never empty
-    std::unordered_map<const AstExpr*, TypeId> astTypes;
-    std::unordered_map<const AstExpr*, TypeId> astExpectedTypes;
-    std::unordered_map<const AstExpr*, TypeId> astOriginalCallTypes;
-    std::unordered_map<const AstExpr*, TypeId> astOverloadResolvedTypes;
+
+    DenseHashMap<const AstExpr*, TypeId> astTypes{nullptr};
+    DenseHashMap<const AstExpr*, TypeId> astExpectedTypes{nullptr};
+    DenseHashMap<const AstExpr*, TypeId> astOriginalCallTypes{nullptr};
+    DenseHashMap<const AstExpr*, TypeId> astOverloadResolvedTypes{nullptr};
+
     std::unordered_map<Name, TypeId> declaredGlobals;
     ErrorVec errors;
     Mode mode;

@@ -92,7 +92,7 @@ std::ostream& operator<<(std::ostream& stream, const IncorrectGenericParameterCo
 {
     stream << "IncorrectGenericParameterCount { name = " << error.name;
 
-    if (!error.typeFun.typeParams.empty())
+    if (!error.typeFun.typeParams.empty() || !error.typeFun.typePackParams.empty())
     {
         stream << "<";
         bool first = true;
@@ -105,6 +105,17 @@ std::ostream& operator<<(std::ostream& stream, const IncorrectGenericParameterCo
 
             stream << toString(t);
         }
+
+        for (TypePackId t : error.typeFun.typePackParams)
+        {
+            if (first)
+                first = false;
+            else
+                stream << ", ";
+
+            stream << toString(t);
+        }
+
         stream << ">";
     }
 

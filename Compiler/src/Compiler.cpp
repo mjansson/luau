@@ -4,15 +4,15 @@
 #include "Luau/Parser.h"
 #include "Luau/BytecodeBuilder.h"
 #include "Luau/Common.h"
+#include "Luau/TimeTrace.h"
 
 #include <algorithm>
 #include <bitset>
 #include <math.h>
 
 LUAU_FASTFLAGVARIABLE(LuauPreloadClosures, false)
-LUAU_FASTFLAGVARIABLE(LuauPreloadClosuresFenv, false)
-LUAU_FASTFLAGVARIABLE(LuauPreloadClosuresUpval, false)
 LUAU_FASTFLAG(LuauIfElseExpressionBaseSupport)
+LUAU_FASTFLAGVARIABLE(LuauBit32CountBuiltin, false)
 
 namespace Luau
 {
@@ -20,8 +20,6 @@ namespace Luau
 static const uint32_t kMaxRegisterCount = 255;
 static const uint32_t kMaxUpvalueCount = 200;
 static const uint32_t kMaxLocalCount = 200;
-
-static const char* kSpecialGlobals[] = {"Game", "Workspace", "_G", "game", "plugin", "script", "shared", "workspace"};
 
 CompileError::CompileError(const Location& location, const std::string& message)
     : location(location)
@@ -137,6 +135,11 @@ struct Compiler
 
     uint32_t compileFunction(AstExprFunction* func)
     {
+        LUAU_TIMETRACE_SCOPE("Compiler::compileFunction", "Compiler");
+
+        if (func->debugname.value)
+            LUAU_TIMETRACE_ARGUMENT("name", func->debugname.value);
+
         LUAU_ASSERT(!functions.contains(func));
         LUAU_ASSERT(regTop == 0 && stackSize == 0 && localStack.empty() && upvals.empty());
 
@@ -318,12 +321,14 @@ struct Compiler
                     compileExprTempTop(expr->args.data[i], uint8_t(regs + 1 + expr->self + i));
         }
 
-        setDebugLine(expr->func);
+        setDebugLineEnd(expr->func);
 
         if (expr->self)
         {
             AstExprIndexName* fi = expr->func->as<AstExprIndexName>();
             LUAU_ASSERT(fi);
+
+            setDebugLine(fi->indexLocation);
 
             BytecodeBuilder::StringRef iname = sref(fi->index);
             int32_t cid = bytecode.addConstantString(iname);
@@ -457,7 +462,7 @@ struct Compiler
 
         bool shared = false;
 
-        if (FFlag::LuauPreloadClosuresUpval)
+        if (FFlag::LuauPreloadClosures)
         {
             // Optimization: when closure has no upvalues, or upvalues are safe to share, instead of allocating it every time we can share closure
             // objects (this breaks assumptions about function identity which can lead to setfenv not working as expected, so we disable this when it
@@ -471,18 +476,6 @@ struct Compiler
                     bytecode.emitAD(LOP_DUPCLOSURE, target, cid);
                     shared = true;
                 }
-            }
-        }
-        // Optimization: when closure has no upvalues, instead of allocating it every time we can share closure objects
-        // (this breaks assumptions about function identity which can lead to setfenv not working as expected, so we disable this when it is used)
-        else if (FFlag::LuauPreloadClosures && options.optimizationLevel >= 1 && f->upvals.empty() && !setfenvUsed)
-        {
-            int32_t cid = bytecode.addConstantClosure(f->id);
-
-            if (cid >= 0 && cid < 32768)
-            {
-                bytecode.emitAD(LOP_DUPCLOSURE, target, cid);
-                return;
             }
         }
 
@@ -712,9 +705,9 @@ struct Compiler
     }
 
     // compile expr to target temp register
-    // if the expr (or not expr if onlyTruth is false) is truthful, jump via skipJump
-    // if the expr (or not expr if onlyTruth is false) is falseful, fall through (target isn't guaranteed to be updated in this case)
-    // if target is omitted, then the jump behavior is the same - skipJump or fallthrough depending on the truthfulness of the expression
+    // if the expr (or not expr if onlyTruth is false) is truthy, jump via skipJump
+    // if the expr (or not expr if onlyTruth is false) is falsy, fall through (target isn't guaranteed to be updated in this case)
+    // if target is omitted, then the jump behavior is the same - skipJump or fallthrough depending on the truthiness of the expression
     void compileConditionValue(AstExpr* node, const uint8_t* target, std::vector<size_t>& skipJump, bool onlyTruth)
     {
         // Optimization: we don't need to compute constant values
@@ -722,7 +715,7 @@ struct Compiler
 
         if (cv && cv->type != Constant::Type_Unknown)
         {
-            // note that we only need to compute the value if it's truthful; otherwise we cal fall through
+            // note that we only need to compute the value if it's truthy; otherwise we cal fall through
             if (cv->isTruthful() == onlyTruth)
             {
                 if (target)
@@ -741,7 +734,7 @@ struct Compiler
             case AstExprBinary::And:
             case AstExprBinary::Or:
             {
-                // disambiguation: there's 4 cases (we only need truthful or falseful results based on onlyTruth)
+                // disambiguation: there's 4 cases (we only need truthy or falsy results based on onlyTruth)
                 // onlyTruth = 1: a and b transforms to a ? b : dontcare
                 // onlyTruth = 1: a or b transforms to a ? a : a
                 // onlyTruth = 0: a and b transforms to !a ? a : b
@@ -785,8 +778,8 @@ struct Compiler
                 if (target)
                 {
                     // since target is a temp register, we'll initialize it to 1, and then jump if the comparison is true
-                    // if the comparison is false, we'll fallthrough and target will still be 1 but target has unspecified value for falseful results
-                    // when we only care about falseful values instead of truthful values, the process is the same but with flipped conditionals
+                    // if the comparison is false, we'll fallthrough and target will still be 1 but target has unspecified value for falsy results
+                    // when we only care about falsy values instead of truthy values, the process is the same but with flipped conditionals
                     bytecode.emitABC(LOP_LOADB, *target, onlyTruth ? 1 : 0, 0);
                 }
 
@@ -1271,7 +1264,7 @@ struct Compiler
     {
         const Global* global = globals.find(expr->name);
 
-        return options.optimizationLevel >= 1 && (!global || (!global->written && !global->special));
+        return options.optimizationLevel >= 1 && (!global || (!global->written && !global->writable));
     }
 
     void compileExprIndexName(AstExprIndexName* expr, uint8_t target)
@@ -1321,6 +1314,8 @@ struct Compiler
 
         RegScope rs(this);
         uint8_t reg = compileExprAuto(expr->expr, rs);
+
+        setDebugLine(expr->indexLocation);
 
         BytecodeBuilder::StringRef iname = sref(expr->index);
         int32_t cid = bytecode.addConstantString(iname);
@@ -2459,9 +2454,10 @@ struct Compiler
         }
         else if (node->is<AstStatBreak>())
         {
+            LUAU_ASSERT(!loops.empty());
+
             // before exiting out of the loop, we need to close all local variables that were captured in closures since loop start
             // normally they are closed by the enclosing blocks, including the loop block, but we're skipping that here
-            LUAU_ASSERT(!loops.empty());
             closeLocals(loops.back().localOffset);
 
             size_t label = bytecode.emitLabel();
@@ -2472,12 +2468,13 @@ struct Compiler
         }
         else if (AstStatContinue* stat = node->as<AstStatContinue>())
         {
+            LUAU_ASSERT(!loops.empty());
+
             if (loops.back().untilCondition)
                 validateContinueUntil(stat, loops.back().untilCondition);
 
             // before continuing, we need to close all local variables that were captured in closures since loop start
             // normally they are closed by the enclosing blocks, including the loop block, but we're skipping that here
-            LUAU_ASSERT(!loops.empty());
             closeLocals(loops.back().localOffset);
 
             size_t label = bytecode.emitLabel();
@@ -2717,6 +2714,12 @@ struct Compiler
             bytecode.setDebugLine(node->location.begin.line + 1);
     }
 
+    void setDebugLine(const Location& location)
+    {
+        if (options.debugLevel >= 1)
+            bytecode.setDebugLine(location.begin.line + 1);
+    }
+
     void setDebugLineEnd(AstNode* node)
     {
         if (options.debugLevel >= 1)
@@ -2894,6 +2897,11 @@ struct Compiler
                 break;
 
             case AstExprUnary::Len:
+                if (arg.type == Constant::Type_String)
+                {
+                    result.type = Constant::Type_Number;
+                    result.valueNumber = double(arg.valueString.size);
+                }
                 break;
 
             default:
@@ -3282,8 +3290,7 @@ struct Compiler
         bool visit(AstStatLocalFunction* node) override
         {
             // record local->function association for some optimizations
-            if (FFlag::LuauPreloadClosuresUpval)
-                self->locals[node->name].func = node->func;
+            self->locals[node->name].func = node->func;
 
             return true;
         }
@@ -3434,7 +3441,7 @@ struct Compiler
 
     struct Global
     {
-        bool special = false;
+        bool writable = false;
         bool written = false;
     };
 
@@ -3492,7 +3499,7 @@ struct Compiler
             {
                 Global* g = globals.find(object->name);
 
-                return !g || (!g->special && !g->written) ? Builtin{object->name, expr->index} : Builtin();
+                return !g || (!g->writable && !g->written) ? Builtin{object->name, expr->index} : Builtin();
             }
             else
             {
@@ -3623,6 +3630,10 @@ struct Compiler
                 return LBF_BIT32_RROTATE;
             if (builtin.method == "rshift")
                 return LBF_BIT32_RSHIFT;
+            if (builtin.method == "countlz" && FFlag::LuauBit32CountBuiltin)
+                return LBF_BIT32_COUNTLZ;
+            if (builtin.method == "countrz" && FFlag::LuauBit32CountBuiltin)
+                return LBF_BIT32_COUNTRZ;
         }
 
         if (builtin.object == "string")
@@ -3649,7 +3660,7 @@ struct Compiler
         {
             if (options.vectorLib)
             {
-                if (builtin.object == options.vectorLib && builtin.method == options.vectorCtor)
+                if (builtin.isMethod(options.vectorLib, options.vectorCtor))
                     return LBF_VECTOR;
             }
             else
@@ -3686,16 +3697,18 @@ struct Compiler
 
 void compileOrThrow(BytecodeBuilder& bytecode, AstStatBlock* root, const AstNameTable& names, const CompileOptions& options)
 {
+    LUAU_TIMETRACE_SCOPE("compileOrThrow", "Compiler");
+
     Compiler compiler(bytecode, options);
 
-    // since access to some global objects may result in values that change over time, we block table imports
-    for (const char* global : kSpecialGlobals)
-    {
-        AstName name = names.get(global);
+    // since access to some global objects may result in values that change over time, we block imports from non-readonly tables
+    if (AstName name = names.get("_G"); name.value)
+        compiler.globals[name].writable = true;
 
-        if (name.value)
-            compiler.globals[name].special = true;
-    }
+    if (options.mutableGlobals)
+        for (const char** ptr = options.mutableGlobals; *ptr; ++ptr)
+            if (AstName name = names.get(*ptr); name.value)
+                compiler.globals[name].writable = true;
 
     // this visitor traverses the AST to analyze mutability of locals/globals, filling Local::written and Global::written
     Compiler::AssignmentVisitor assignmentVisitor(&compiler);
@@ -3709,7 +3722,7 @@ void compileOrThrow(BytecodeBuilder& bytecode, AstStatBlock* root, const AstName
     }
 
     // this visitor tracks calls to getfenv/setfenv and disables some optimizations when they are found
-    if (FFlag::LuauPreloadClosuresFenv && options.optimizationLevel >= 1)
+    if (options.optimizationLevel >= 1 && (names.get("getfenv").value || names.get("setfenv").value))
     {
         Compiler::FenvVisitor fenvVisitor(compiler.getfenvUsed, compiler.setfenvUsed);
         root->visit(&fenvVisitor);
@@ -3748,6 +3761,8 @@ void compileOrThrow(BytecodeBuilder& bytecode, const std::string& source, const 
 
 std::string compile(const std::string& source, const CompileOptions& options, const ParseOptions& parseOptions, BytecodeEncoder* encoder)
 {
+    LUAU_TIMETRACE_SCOPE("compile", "Compiler");
+
     Allocator allocator;
     AstNameTable names(allocator);
     ParseResult result = Parser::parse(source.c_str(), source.size(), names, allocator, parseOptions);

@@ -67,6 +67,10 @@ std::optional<std::string> readFile(const std::string& name)
     if (read != size_t(length))
         return std::nullopt;
 
+    // Skip first line if it's a shebang
+    if (length > 2 && result[0] == '#' && result[1] == '!')
+        result.erase(0, result.find('\n'));
+
     return result;
 }
 
@@ -142,6 +146,7 @@ static bool traverseDirectoryRec(const std::string& path, const std::function<vo
             joinPaths(buf, path.c_str(), data.d_name);
 
             int type = data.d_type;
+            int mode = -1;
 
             // we need to stat DT_UNKNOWN to be able to tell the type
             if (type == DT_UNKNOWN)
@@ -153,18 +158,18 @@ static bool traverseDirectoryRec(const std::string& path, const std::function<vo
                 lstat(buf.c_str(), &st);
 #endif
 
-                type = IFTODT(st.st_mode);
+                mode = st.st_mode;
             }
 
-            if (type == DT_DIR)
+            if (type == DT_DIR || mode == S_IFDIR)
             {
                 traverseDirectoryRec(buf, callback);
             }
-            else if (type == DT_REG)
+            else if (type == DT_REG || mode == S_IFREG)
             {
                 callback(buf);
             }
-            else if (type == DT_LNK)
+            else if (type == DT_LNK || mode == S_IFLNK)
             {
                 // Skip symbolic links to avoid handling cycles
             }
@@ -221,4 +226,41 @@ std::optional<std::string> getParentPath(const std::string& path)
         return path.substr(0, slash);
 
     return "";
+}
+
+static std::string getExtension(const std::string& path)
+{
+    std::string::size_type dot = path.find_last_of(".\\/");
+
+    if (dot == std::string::npos || path[dot] != '.')
+        return "";
+
+    return path.substr(dot);
+}
+
+std::vector<std::string> getSourceFiles(int argc, char** argv)
+{
+    std::vector<std::string> files;
+
+    for (int i = 1; i < argc; ++i)
+    {
+        if (argv[i][0] == '-')
+            continue;
+
+        if (isDirectory(argv[i]))
+        {
+            traverseDirectory(argv[i], [&](const std::string& name) {
+                std::string ext = getExtension(name);
+
+                if (ext == ".lua" || ext == ".luau")
+                    files.push_back(name);
+            });
+        }
+        else
+        {
+            files.push_back(argv[i]);
+        }
+    }
+
+    return files;
 }

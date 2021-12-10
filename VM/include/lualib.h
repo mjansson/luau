@@ -8,11 +8,12 @@
 #define luaL_typeerror(L, narg, tname) luaL_typeerrorL(L, narg, tname)
 #define luaL_argerror(L, narg, extramsg) luaL_argerrorL(L, narg, extramsg)
 
-typedef struct luaL_Reg
+struct luaL_Reg
 {
     const char* name;
     lua_CFunction func;
-} luaL_Reg;
+};
+typedef struct luaL_Reg luaL_Reg;
 
 LUALIB_API void luaL_register(lua_State* L, const char* libname, const luaL_Reg* l);
 LUALIB_API int luaL_getmetafield(lua_State* L, int obj, const char* e);
@@ -24,10 +25,16 @@ LUALIB_API const char* luaL_optlstring(lua_State* L, int numArg, const char* def
 LUALIB_API double luaL_checknumber(lua_State* L, int numArg);
 LUALIB_API double luaL_optnumber(lua_State* L, int nArg, double def);
 
+LUALIB_API int luaL_checkboolean(lua_State* L, int narg);
+LUALIB_API int luaL_optboolean(lua_State* L, int narg, int def);
+
 LUALIB_API int luaL_checkinteger(lua_State* L, int numArg);
 LUALIB_API int luaL_optinteger(lua_State* L, int nArg, int def);
 LUALIB_API unsigned luaL_checkunsigned(lua_State* L, int numArg);
 LUALIB_API unsigned luaL_optunsigned(lua_State* L, int numArg, unsigned def);
+
+LUALIB_API const float* luaL_checkvector(lua_State* L, int narg);
+LUALIB_API const float* luaL_optvector(lua_State* L, int narg, const float* def);
 
 LUALIB_API void luaL_checkstack(lua_State* L, int sz, const char* msg);
 LUALIB_API void luaL_checktype(lua_State* L, int narg, int t);
@@ -67,16 +74,17 @@ LUALIB_API const char* luaL_findtable(lua_State* L, int idx, const char* fname, 
 
 /* generic buffer manipulation */
 
-typedef struct luaL_Buffer
+struct luaL_Buffer
 {
     char* p;   // current position in buffer
     char* end; // end of the current buffer
     lua_State* L;
     struct TString* storage;
     char buffer[LUA_BUFFERSIZE];
-} luaL_Buffer;
+};
+typedef struct luaL_Buffer luaL_Buffer;
 
-// when internal buffer storage is exhaused, a mutable string value 'storage' will be placed on the stack
+// when internal buffer storage is exhausted, a mutable string value 'storage' will be placed on the stack
 // in general, functions expect the mutable string buffer to be placed on top of the stack (top-1)
 // with the exception of luaL_addvalue that expects the value at the top and string buffer further away (top-2)
 // functions that accept a 'boxloc' support string buffer placement at any location in the stack

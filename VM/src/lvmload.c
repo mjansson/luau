@@ -9,6 +9,7 @@
 #include "lgc.h"
 #include "lmem.h"
 #include "lbytecode.h"
+#include "lapi.h"
 
 #include <string.h>
 
@@ -17,7 +18,7 @@ void luaV_getimport(lua_State* L, Table* env, TValue* k, uint32_t id, int propag
     int count = id >> 30;
     int id0 = count > 0 ? (int)(id >> 20) & 1023 : -1;
     int id1 = count > 1 ? (int)(id >> 10) & 1023 : -1;
-    int id2 = count > 2 ? (int)(id) & 1023 : -1;
+    int id2 = count > 2 ? (int)(id)&1023 : -1;
 
     // allocate a stack slot so that we can do table lookups
     luaD_checkstack(L, 1);
@@ -162,12 +163,12 @@ int luau_load(lua_State* L, const char* chunkname, const char* data, size_t size
     }
 
     // pause GC for the duration of deserialization - some objects we're creating aren't rooted
+    // TODO: if an allocation error happens mid-load, we do not unpause GC!
     size_t GCthreshold = L->global->GCthreshold;
     L->global->GCthreshold = SIZE_MAX;
 
-    // env is 0 for current environment and a stack relative index otherwise
-    LUAU_ASSERT(env <= 0 && L->top - L->base >= -env);
-    Table* envt = (env == 0) ? hvalue(gt(L)) : hvalue(L->top + env);
+    // env is 0 for current environment and a stack index otherwise
+    Table* envt = (env == 0) ? hvalue(gt(L)) : hvalue(luaA_toobject(L, env));
 
     TString* source = luaS_new(L, chunkname);
 
@@ -348,6 +349,8 @@ int luau_load(lua_State* L, const char* chunkname, const char* data, size_t size
     // "main" proto is pushed to Lua stack
     uint32_t mainid = readVarInt(data, size, &offset);
     Proto* main = protos[mainid];
+
+    luaC_checkthreadsleep(L);
 
     Closure* cl = luaF_newLclosure(L, 0, envt, main);
     setclvalue(L, L->top, cl);

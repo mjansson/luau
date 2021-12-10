@@ -53,7 +53,7 @@ const float* luaV_tovector(const TValue* obj)
 static void callTMres(lua_State* L, StkId res, const TValue* f, const TValue* p1, const TValue* p2)
 {
     ptrdiff_t result = savestack(L, res);
-    // RBOLOX: using stack room beyond top is technically safe here, but for very complicated reasons:
+    // using stack room beyond top is technically safe here, but for very complicated reasons:
     // * The stack guarantees 1 + EXTRA_STACK room beyond stack_last (see luaD_reallocstack) will be allocated
     // * we cannot move luaD_checkstack above because the arguments are *sometimes* pointers to the lua
     // stack and checkstack may invalidate those pointers
@@ -74,7 +74,7 @@ static void callTMres(lua_State* L, StkId res, const TValue* f, const TValue* p1
 
 static void callTM(lua_State* L, const TValue* f, const TValue* p1, const TValue* p2, const TValue* p3)
 {
-    // RBOLOX: using stack room beyond top is technically safe here, but for very complicated reasons:
+    // using stack room beyond top is technically safe here, but for very complicated reasons:
     // * The stack guarantees 1 + EXTRA_STACK room beyond stack_last (see luaD_reallocstack) will be allocated
     // * we cannot move luaD_checkstack above because the arguments are *sometimes* pointers to the lua
     // stack and checkstack may invalidate those pointers
@@ -401,19 +401,19 @@ void luaV_doarith(lua_State* L, StkId ra, const TValue* rb, const TValue* rc, TM
             switch (op)
             {
             case TM_ADD:
-                setvvalue(ra, vb[0] + vc[0], vb[1] + vc[1], vb[2] + vc[2]);
+                setvvalue(ra, vb[0] + vc[0], vb[1] + vc[1], vb[2] + vc[2], vb[3] + vc[3]);
                 return;
             case TM_SUB:
-                setvvalue(ra, vb[0] - vc[0], vb[1] - vc[1], vb[2] - vc[2]);
+                setvvalue(ra, vb[0] - vc[0], vb[1] - vc[1], vb[2] - vc[2], vb[3] - vc[3]);
                 return;
             case TM_MUL:
-                setvvalue(ra, vb[0] * vc[0], vb[1] * vc[1], vb[2] * vc[2]);
+                setvvalue(ra, vb[0] * vc[0], vb[1] * vc[1], vb[2] * vc[2], vb[3] * vc[3]);
                 return;
             case TM_DIV:
-                setvvalue(ra, vb[0] / vc[0], vb[1] / vc[1], vb[2] / vc[2]);
+                setvvalue(ra, vb[0] / vc[0], vb[1] / vc[1], vb[2] / vc[2], vb[3] / vc[3]);
                 return;
             case TM_UNM:
-                setvvalue(ra, -vb[0], -vb[1], -vb[2]);
+                setvvalue(ra, -vb[0], -vb[1], -vb[2], -vb[3]);
                 return;
             default:
                 break;
@@ -430,10 +430,10 @@ void luaV_doarith(lua_State* L, StkId ra, const TValue* rb, const TValue* rc, TM
                 switch (op)
                 {
                 case TM_MUL:
-                    setvvalue(ra, vb[0] * nc, vb[1] * nc, vb[2] * nc);
+                    setvvalue(ra, vb[0] * nc, vb[1] * nc, vb[2] * nc, vb[3] * nc);
                     return;
                 case TM_DIV:
-                    setvvalue(ra, vb[0] / nc, vb[1] / nc, vb[2] / nc);
+                    setvvalue(ra, vb[0] / nc, vb[1] / nc, vb[2] / nc, vb[3] / nc);
                     return;
                 default:
                     break;
@@ -451,10 +451,10 @@ void luaV_doarith(lua_State* L, StkId ra, const TValue* rb, const TValue* rc, TM
                 switch (op)
                 {
                 case TM_MUL:
-                    setvvalue(ra, nb * vc[0], nb * vc[1], nb * vc[2]);
+                    setvvalue(ra, nb * vc[0], nb * vc[1], nb * vc[2], nb * vc[3]);
                     return;
                 case TM_DIV:
-                    setvvalue(ra, nb / vc[0], nb / vc[1], nb / vc[2]);
+                    setvvalue(ra, nb / vc[0], nb / vc[1], nb / vc[2], nb / vc[3]);
                     return;
                 default:
                     break;

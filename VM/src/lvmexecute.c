@@ -16,9 +16,6 @@
 
 #include <string.h>
 
-/* TODO: C++
-LUAU_FASTFLAGVARIABLE(LuauLoopUseSafeenv, false)*/
-
 // Disable c99-designator to avoid the warning in CGOTO dispatch table
 #ifdef __clang__
 #if __has_warning("-Wc99-designator")
@@ -26,7 +23,7 @@ LUAU_FASTFLAGVARIABLE(LuauLoopUseSafeenv, false)*/
 #endif
 #endif
 #ifdef _MSC_VER
-#pragma warning(disable: 4706)
+#pragma warning(disable : 4706)
 #endif
 
 // When working with VM code, pay attention to these rules for correctness:
@@ -296,11 +293,7 @@ inline int luau_skipstep(uint8_t op)
     return op == LOP_PREPVARARGS || op == LOP_BREAK;
 }
 
-// declared in lbaselib.cpp, needed to support cases when pairs/ipairs have been replaced via setfenv
-LUAI_FUNC int luaB_inext(lua_State* L);
-LUAI_FUNC int luaB_next(lua_State* L);
-
-void luau_execute(lua_State* L)
+static void luau_execute(lua_State* L)
 {
 #if VM_USE_CGOTO
     static const void* kDispatchTable[256] = {VM_DISPATCH_TABLE()};
@@ -610,7 +603,13 @@ void luau_execute(lua_State* L)
                         const char* name = getstr(tsvalue(kv));
                         int ic = (name[0] | ' ') - 'x';
 
-                        if ((unsigned)(ic) < 3 && name[1] == '\0')
+#if LUA_VECTOR_SIZE == 4
+                        // 'w' is before 'x' in ascii, so ic is -1 when indexing with 'w'
+                        if (ic == -1)
+                            ic = 3;
+#endif
+
+                        if ((unsigned)(ic) < LUA_VECTOR_SIZE && name[1] == '\0')
                         {
                             setnvalue(ra, rb->value.v[ic]);
                             VM_NEXT();
@@ -1536,7 +1535,7 @@ void luau_execute(lua_State* L)
                 {
                     const float* vb = rb->value.v;
                     const float* vc = rc->value.v;
-                    setvvalue(ra, vb[0] + vc[0], vb[1] + vc[1], vb[2] + vc[2]);
+                    setvvalue(ra, vb[0] + vc[0], vb[1] + vc[1], vb[2] + vc[2], vb[3] + vc[3]);
                     VM_NEXT();
                 }
                 else
@@ -1582,7 +1581,7 @@ void luau_execute(lua_State* L)
                 {
                     const float* vb = rb->value.v;
                     const float* vc = rc->value.v;
-                    setvvalue(ra, vb[0] - vc[0], vb[1] - vc[1], vb[2] - vc[2]);
+                    setvvalue(ra, vb[0] - vc[0], vb[1] - vc[1], vb[2] - vc[2], vb[3] - vc[3]);
                     VM_NEXT();
                 }
                 else
@@ -1628,21 +1627,21 @@ void luau_execute(lua_State* L)
                 {
                     const float* vb = rb->value.v;
                     float vc = cast_to(float, nvalue(rc));
-                    setvvalue(ra, vb[0] * vc, vb[1] * vc, vb[2] * vc);
+                    setvvalue(ra, vb[0] * vc, vb[1] * vc, vb[2] * vc, vb[3] * vc);
                     VM_NEXT();
                 }
                 else if (ttisvector(rb) && ttisvector(rc))
                 {
                     const float* vb = rb->value.v;
                     const float* vc = rc->value.v;
-                    setvvalue(ra, vb[0] * vc[0], vb[1] * vc[1], vb[2] * vc[2]);
+                    setvvalue(ra, vb[0] * vc[0], vb[1] * vc[1], vb[2] * vc[2], vb[3] * vc[3]);
                     VM_NEXT();
                 }
                 else if (ttisnumber(rb) && ttisvector(rc))
                 {
                     float vb = cast_to(float, nvalue(rb));
                     const float* vc = rc->value.v;
-                    setvvalue(ra, vb * vc[0], vb * vc[1], vb * vc[2]);
+                    setvvalue(ra, vb * vc[0], vb * vc[1], vb * vc[2], vb * vc[3]);
                     VM_NEXT();
                 }
                 else
@@ -1689,21 +1688,21 @@ void luau_execute(lua_State* L)
                 {
                     const float* vb = rb->value.v;
                     float vc = cast_to(float, nvalue(rc));
-                    setvvalue(ra, vb[0] / vc, vb[1] / vc, vb[2] / vc);
+                    setvvalue(ra, vb[0] / vc, vb[1] / vc, vb[2] / vc, vb[3] / vc);
                     VM_NEXT();
                 }
                 else if (ttisvector(rb) && ttisvector(rc))
                 {
                     const float* vb = rb->value.v;
                     const float* vc = rc->value.v;
-                    setvvalue(ra, vb[0] / vc[0], vb[1] / vc[1], vb[2] / vc[2]);
+                    setvvalue(ra, vb[0] / vc[0], vb[1] / vc[1], vb[2] / vc[2], vb[3] / vc[3]);
                     VM_NEXT();
                 }
                 else if (ttisnumber(rb) && ttisvector(rc))
                 {
                     float vb = cast_to(float, nvalue(rb));
                     const float* vc = rc->value.v;
-                    setvvalue(ra, vb / vc[0], vb / vc[1], vb / vc[2]);
+                    setvvalue(ra, vb / vc[0], vb / vc[1], vb / vc[2], vb / vc[3]);
                     VM_NEXT();
                 }
                 else
@@ -1836,7 +1835,7 @@ void luau_execute(lua_State* L)
                 {
                     const float* vb = rb->value.v;
                     float vc = cast_to(float, nvalue(kv));
-                    setvvalue(ra, vb[0] * vc, vb[1] * vc, vb[2] * vc);
+                    setvvalue(ra, vb[0] * vc, vb[1] * vc, vb[2] * vc, vb[3] * vc);
                     VM_NEXT();
                 }
                 else
@@ -1882,7 +1881,7 @@ void luau_execute(lua_State* L)
                 {
                     const float* vb = rb->value.v;
                     float vc = cast_to(float, nvalue(kv));
-                    setvvalue(ra, vb[0] / vc, vb[1] / vc, vb[2] / vc);
+                    setvvalue(ra, vb[0] / vc, vb[1] / vc, vb[2] / vc, vb[3] / vc);
                     VM_NEXT();
                 }
                 else
@@ -2047,7 +2046,7 @@ void luau_execute(lua_State* L)
                 else if (ttisvector(rb))
                 {
                     const float* vb = rb->value.v;
-                    setvvalue(ra, -vb[0], -vb[1], -vb[2]);
+                    setvvalue(ra, -vb[0], -vb[1], -vb[2], -vb[3]);
                     VM_NEXT();
                 }
                 else
@@ -2227,10 +2226,7 @@ void luau_execute(lua_State* L)
                 StkId ra = VM_REG(LUAU_INSN_A(insn));
 
                 // fast-path: ipairs/inext
-                /* TODO: C++
-                int safeenv = FFlag::LuauLoopUseSafeenv ? cl->env->safeenv : ttisfunction(ra) && clvalue(ra)->isC && clvalue(ra)->c.f == luaB_inext;*/
-                int safeenv = ttisfunction(ra) && clvalue(ra)->isC && clvalue(ra)->c.f == luaB_inext;
-                if (safeenv && ttistable(ra + 1) && ttisnumber(ra + 2) && nvalue(ra + 2) == 0.0)
+                if (cl->env->safeenv && ttistable(ra + 1) && ttisnumber(ra + 2) && nvalue(ra + 2) == 0.0)
                 {
                     setpvalue(ra + 2, (void*)((uintptr_t)(0)));
                 }
@@ -2310,10 +2306,7 @@ void luau_execute(lua_State* L)
                 StkId ra = VM_REG(LUAU_INSN_A(insn));
 
                 // fast-path: pairs/next
-                /* TODO: C++
-                int safeenv = FFlag::LuauLoopUseSafeenv ? cl->env->safeenv : ttisfunction(ra) && clvalue(ra)->isC && clvalue(ra)->c.f == luaB_next;*/
-                int safeenv = ttisfunction(ra) && clvalue(ra)->isC && clvalue(ra)->c.f == luaB_next;
-                if (safeenv && ttistable(ra + 1) && ttisnil(ra + 2))
+                if (cl->env->safeenv && ttistable(ra + 1) && ttisnil(ra + 2))
                 {
                     setpvalue(ra + 2, (void*)((uintptr_t)(0)));
                 }

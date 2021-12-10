@@ -3,16 +3,25 @@
 
 #include "Luau/TypeVar.h"
 
+LUAU_FASTFLAG(LuauShareTxnSeen);
+
 namespace Luau
 {
 
 // Log of where what TypeIds we are rebinding and what they used to be
 struct TxnLog
 {
-    TxnLog() = default;
+    TxnLog()
+        : originalSeenSize(0)
+        , ownedSeen()
+        , sharedSeen(&ownedSeen)
+    {
+    }
 
-    explicit TxnLog(const std::vector<std::pair<TypeId, TypeId>>& seen)
-        : seen(seen)
+    explicit TxnLog(std::vector<std::pair<TypeId, TypeId>>* sharedSeen)
+        : originalSeenSize(sharedSeen->size())
+        , ownedSeen()
+        , sharedSeen(sharedSeen)
     {
     }
 
@@ -38,9 +47,11 @@ private:
     std::vector<std::pair<TypeId, TypeVar>> typeVarChanges;
     std::vector<std::pair<TypePackId, TypePackVar>> typePackChanges;
     std::vector<std::pair<TableTypeVar*, std::optional<TypeId>>> tableChanges;
+    size_t originalSeenSize;
 
 public:
-    std::vector<std::pair<TypeId, TypeId>> seen; // used to avoid infinite recursion when types are cyclic
+    std::vector<std::pair<TypeId, TypeId>> ownedSeen;   // used to avoid infinite recursion when types are cyclic
+    std::vector<std::pair<TypeId, TypeId>>* sharedSeen; // shared with all the descendent logs
 };
 
 } // namespace Luau

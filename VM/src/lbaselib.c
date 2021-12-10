@@ -401,7 +401,7 @@ static int luaB_newproxy(lua_State* L)
 
     int needsmt = lua_toboolean(L, 1);
 
-    lua_newuserdata(L, 0, 0);
+    lua_newuserdata(L, 0);
 
     if (needsmt)
     {
@@ -436,12 +436,12 @@ static const luaL_Reg base_funcs[] = {
 
 static void auxopen(lua_State* L, const char* name, lua_CFunction f, lua_CFunction u)
 {
-    lua_pushcfunction(L, u);
-    lua_pushcfunction_full(L, f, name, 1, 0);
+    lua_pushcfunction(L, u, 0);
+    lua_pushcclosure(L, f, name, 1);
     lua_setfield(L, -2, name);
 }
 
-LUALIB_API int luaopen_base(lua_State* L)
+int luaopen_base(lua_State* L)
 {
     /* set global _G */
     lua_pushvalue(L, LUA_GLOBALSINDEX);
@@ -456,10 +456,10 @@ LUALIB_API int luaopen_base(lua_State* L)
     auxopen(L, "ipairs", luaB_ipairs, luaB_inext);
     auxopen(L, "pairs", luaB_pairs, luaB_next);
 
-    lua_pushcfunction_full(L, luaB_pcally, "pcall", 0, luaB_pcallcont);
+    lua_pushcclosurek(L, luaB_pcally, "pcall", 0, luaB_pcallcont);
     lua_setfield(L, -2, "pcall");
 
-    lua_pushcfunction_full(L, luaB_xpcally, "xpcall", 0, luaB_xpcallcont);
+    lua_pushcclosurek(L, luaB_xpcally, "xpcall", 0, luaB_xpcallcont);
     lua_setfield(L, -2, "xpcall");
 
     return 1;

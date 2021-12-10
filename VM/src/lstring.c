@@ -227,7 +227,7 @@ void luaS_freeudata(lua_State* L, Udata* u)
 
     void (*dtor)(void*) = 0;
     if (u->tag == UTAG_IDTOR)
-        memcpy(&dtor, u->data + u->len - sizeof(dtor), sizeof(dtor));
+        memcpy(&dtor, &u->data + u->len - sizeof(dtor), sizeof(dtor));
     else if (u->tag)
         dtor = L->global->udatagc[u->tag];
 
