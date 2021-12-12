@@ -11,11 +11,14 @@
 
 #include <string.h>
 
-/* TODO: C++
-LUAU_FASTFLAGVARIABLE(LuauSeparateAtomic, false)
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#endif
 
-LUAU_FASTFLAG(LuauArrayBoundary)
-*/
+LUAU_FASTFLAGVARIABLE(LuauSeparateAtomic, 0);
+
+LUAU_FASTFLAG(LuauArrayBoundary);
 
 #define GC_SWEEPMAX 40
 #define GC_SWEEPCOST 10
@@ -63,7 +66,7 @@ static void recordGcStateTime(global_State* g, int startgcstate, double seconds,
         g->gcstats.currcycle.marktime += seconds;
 
         // atomic step had to be performed during the switch and it's tracked separately
-        if (!FFlag::LuauSeparateAtomic && g->gcstate == GCSsweepstring)
+        if (!LuauSeparateAtomic && g->gcstate == GCSsweepstring)
             g->gcstats.currcycle.marktime -= g->gcstats.currcycle.atomictime;
         break;
     case GCSatomic:
@@ -74,7 +77,7 @@ static void recordGcStateTime(global_State* g, int startgcstate, double seconds,
         g->gcstats.currcycle.sweeptime += seconds;
         break;
     default:
-        LUAU_ASSERT(!"Unexpected GC state");
+        LUAU_ASSERT(0 && "Unexpected GC state");
     }
 
     if (assist)
@@ -186,7 +189,8 @@ static int traversetable(global_State* g, Table* h)
         markobject(g, cast_to(Table*, h->metatable));
 
     /* is there a weak mode? */
-    if (const char* modev = gettablemode(g, h))
+    const char* modev = gettablemode(g, h);
+    if (modev)
     {
         weakkey = (strchr(modev, 'k') != NULL);
         weakvalue = (strchr(modev, 'v') != NULL);
@@ -324,7 +328,7 @@ static size_t propagatemark(global_State* g)
         LUAU_ASSERT(!luaC_threadsleeping(th));
 
         // threads that are executing and the main thread are not deactivated
-        bool active = luaC_threadactive(th) || th == th->global->mainthread;
+        int active = luaC_threadactive(th) || th == th->global->mainthread;
 
         if (!active && g->gcstate == GCSpropagate)
         {
@@ -428,7 +432,8 @@ static size_t cleartable(lua_State* L, GCObject* l)
             }
         }
 
-        if (const char* modev = gettablemode(L->global, h))
+        const char* modev = gettablemode(L->global, h);
+        if (modev)
         {
             // are we allowed to shrink this weak table?
             if (strchr(modev, 's'))
@@ -438,9 +443,8 @@ static size_t cleartable(lua_State* L, GCObject* l)
                     luaH_resizehash(L, h, activevalues);
             }
         }
-        * /
 
-            l = h->gclist;
+        l = h->gclist;
     }
     return work;
 }
@@ -639,7 +643,7 @@ static size_t atomic(lua_State* L)
     global_State* g = L->global;
     size_t work = 0;
 
-    if (FFlag::LuauSeparateAtomic)
+    if (LuauSeparateAtomic)
     {
         LUAU_ASSERT(g->gcstate == GCSatomic);
     }
@@ -671,7 +675,7 @@ static size_t atomic(lua_State* L)
     g->sweepgc = &g->rootgc;
     g->gcstate = GCSsweepstring;
 
-    if (!FFlag::LuauSeparateAtomic)
+    if (!LuauSeparateAtomic)
     {
         GC_INTERRUPT(GCSatomic);
     }
@@ -721,7 +725,7 @@ static size_t gcstep(lua_State* L, size_t limit)
 
         if (!g->gray) /* no more `gray' objects */
         {
-            if (FFlag::LuauSeparateAtomic)
+            if (LuauSeparateAtomic)
             {
                 g->gcstate = GCSatomic;
             }
@@ -795,7 +799,7 @@ static size_t gcstep(lua_State* L, size_t limit)
         break;
     }
     default:
-        LUAU_ASSERT(!"Unexpected GC state");
+        LUAU_ASSERT(0 && "Unexpected GC state");
     }
     return cost;
 }
@@ -913,7 +917,7 @@ void luaC_fullgc(lua_State* L)
     if (g->gcstate == GCSpause)
         startGcCycleStats(g);
 
-    if (g->gcstate <= (FFlag::LuauSeparateAtomic ? GCSatomic : GCSpropagateagain))
+    if (g->gcstate <= (LuauSeparateAtomic ? GCSatomic : GCSpropagateagain))
     {
         /* reset sweep marks to sweep all elements (returning them to white) */
         g->sweepstrgc = 0;
@@ -1054,7 +1058,7 @@ int64_t luaC_allocationrate(lua_State* L)
     global_State* g = L->global;
     const double durationthreshold = 1e-3; // avoid measuring intervals smaller than 1ms
 
-    if (g->gcstate <= (FFlag::LuauSeparateAtomic ? GCSatomic : GCSpropagateagain))
+    if (g->gcstate <= (LuauSeparateAtomic ? GCSatomic : GCSpropagateagain))
     {
         double duration = lua_clock() - g->gcstats.lastcycle.endtimestamp;
 
@@ -1119,3 +1123,7 @@ const char* luaC_statename(int state)
         return NULL;
     }
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif

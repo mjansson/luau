@@ -20,7 +20,7 @@ static double clock_period()
     QueryPerformanceFrequency(&result);
     return 1.0 / (double)(result.QuadPart);
 #elif defined(__APPLE__)
-    mach_timebase_info_data_t result = {};
+    mach_timebase_info_data_t result = {0};
     mach_timebase_info(&result);
     return (double)(result.numer) / (double)(result.denom) * 1e-9;
 #elif defined(__linux__)
@@ -49,7 +49,9 @@ static double clock_timestamp()
 
 static double period;
 
-extern void lua_setupclock()
+extern void lua_setupclock(void);
+
+void lua_setupclock(void)
 {
     period = clock_period();
 }

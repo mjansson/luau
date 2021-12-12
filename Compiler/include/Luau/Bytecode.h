@@ -379,7 +379,7 @@ enum LuauBytecodeTag
     LBC_VERSION = 1,
     // Types of constant table entries
     LBC_CONSTANT_NIL = 0,
-    LBC_CONSTANT_BOOLEAN,
+    LBC_CONSTANT_BOOLEAN = 1,
     LBC_CONSTANT_NUMBER,
     LBC_CONSTANT_STRING,
     LBC_CONSTANT_IMPORT,

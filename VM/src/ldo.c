@@ -18,11 +18,15 @@
 #include <string.h>
 #include <stdlib.h>
 
-/* TODO: C++
-LUAU_FASTFLAGVARIABLE(LuauCcallRestoreFix, false)
-LUAU_FASTFLAG(LuauCoroutineClose)
-LUAU_FASTFLAGVARIABLE(LuauActivateBeforeExec, true)
-*/
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#pragma clang diagnostic ignored "-Wcast-align"
+#endif
+
+LUAU_FASTFLAGVARIABLE(LuauCcallRestoreFix, 0);
+LUAU_FASTFLAG(LuauCoroutineClose);
+LUAU_FASTFLAGVARIABLE(LuauActivateBeforeExec, 1);
 
 /*
 ** {======================================================
@@ -234,7 +238,7 @@ void luaD_call(lua_State* L, StkId func, int nResults)
     {                                        /* is a Lua function? */
         L->ci->flags |= LUA_CALLINFO_RETURN; /* luau_execute will stop after returning from the stack frame */
 
-        if (FFlag::LuauActivateBeforeExec)
+        if (LuauActivateBeforeExec)
         {
             int oldactive = luaC_threadactive(L);
             l_setbit(L->stackstate, THREAD_ACTIVEBIT);
@@ -316,7 +320,7 @@ static void resume(lua_State* L, void* ud)
     {
         // start coroutine
         LUAU_ASSERT(L->ci == L->base_ci && firstArg >= L->base);
-        if (FFlag::LuauCoroutineClose && firstArg == L->base)
+        if (LuauCoroutineClose && firstArg == L->base)
             luaG_runerror(L, "cannot resume dead coroutine");
 
         if (luau_precall(L, firstArg - 1, LUA_MULTRET) != PCRLUA)
@@ -555,14 +559,14 @@ int luaD_pcall(lua_State* L, Pfunc func, void* u, ptrdiff_t old_top, ptrdiff_t e
                 status = LUA_ERRERR;
         }
 
-        if (FFlag::LuauActivateBeforeExec)
+        if (LuauActivateBeforeExec)
         {
             // since the call failed with an error, we might have to reset the 'active' thread state
             if (!oldactive)
                 resetbit(L->stackstate, THREAD_ACTIVEBIT);
         }
 
-        if (FFlag::LuauCcallRestoreFix)
+        if (LuauCcallRestoreFix)
         {
             // Restore nCcalls before calling the debugprotectederror callback which may rely on the proper value to have been restored.
             L->nCcalls = oldnCcalls;
@@ -581,7 +585,7 @@ int luaD_pcall(lua_State* L, Pfunc func, void* u, ptrdiff_t old_top, ptrdiff_t e
         StkId oldtop = restorestack(L, old_top);
         luaF_close(L, oldtop); /* close eventual pending closures */
         seterrorobj(L, status, oldtop);
-        if (!FFlag::LuauCcallRestoreFix)
+        if (!LuauCcallRestoreFix)
         {
             L->nCcalls = oldnCcalls;
         }
@@ -591,3 +595,7 @@ int luaD_pcall(lua_State* L, Pfunc func, void* u, ptrdiff_t old_top, ptrdiff_t e
     }
     return status;
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif

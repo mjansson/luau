@@ -4,6 +4,13 @@
 
 #include "lua.h"
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#if __has_warning("-Wgnu-zero-variadic-macro-arguments")
+#pragma clang diagnostic ignored "-Wgnu-zero-variadic-macro-arguments"
+#endif
+#endif
+
 #define luaL_error(L, fmt, ...) luaL_errorL(L, fmt, ##__VA_ARGS__)
 #define luaL_typeerror(L, narg, tname) luaL_typeerrorL(L, narg, tname)
 #define luaL_argerror(L, narg, extramsg) luaL_argerrorL(L, narg, extramsg)
@@ -135,3 +142,7 @@ LUALIB_API void luaL_openlibs(lua_State* L);
 /* sandbox libraries and globals */
 LUALIB_API void luaL_sandbox(lua_State* L);
 LUALIB_API void luaL_sandboxthread(lua_State* L);
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif

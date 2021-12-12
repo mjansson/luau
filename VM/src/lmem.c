@@ -21,6 +21,11 @@
 #define ASAN_UNPOISON_MEMORY_REGION(addr, size) (void)0
 #endif
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#endif
+
 /*
  * The sizes of Luau objects aren't crucial for code correctness, but they are crucial for memory efficiency
  * To prevent some of them accidentally growing and us losing memory without realizing it, we're going to lock
@@ -48,7 +53,8 @@ static_assert(sizeof(Table) == ABISWITCH(56, 36, 36), "size mismatch for table h
 #define kSizeClasses ((size_t)(LUA_SIZECLASSES))
 #define kMaxSmallSize ((size_t)512)
 #define kPageSize ((size_t)(16 * 1024 - 24)) // slightly under 16KB since that results in less fragmentation due to heap metadata
-#define kBlockHeader ((size_t)(sizeof(double) > sizeof(void*) ? sizeof(double) : sizeof(void*))) // suitable for aligning double & void* on all platforms
+#define kBlockHeader \
+    ((size_t)(sizeof(double) > sizeof(void*) ? sizeof(double) : sizeof(void*))) // suitable for aligning double & void* on all platforms
 
 static struct SizeClassConfig
 {
@@ -57,7 +63,9 @@ static struct SizeClassConfig
     int classCount;
 } kSizeClassConfig;
 
-extern void lua_setupmemsizeclassconfig()
+extern void lua_setupmemsizeclassconfig(void);
+
+void lua_setupmemsizeclassconfig(void)
 {
     memset(kSizeClassConfig.sizeOfClass, 0, sizeof(kSizeClassConfig.sizeOfClass));
     memset(kSizeClassConfig.classForSize, -1, sizeof(kSizeClassConfig.classForSize));
@@ -344,3 +352,7 @@ void* luaM_realloc_(lua_State* L, void* block, size_t osize, size_t nsize, uint8
     g->memcatbytes[memcat] += nsize - osize;
     return result;
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif

@@ -11,6 +11,15 @@
 
 #include <string.h>
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#pragma clang diagnostic ignored "-Wcast-qual"
+#pragma clang diagnostic ignored "-Wcast-align"
+#pragma clang diagnostic ignored "-Wswitch-enum"
+#pragma clang diagnostic ignored "-Wfloat-equal"
+#endif
+
 /* limit for table tag-method chains (to avoid loops) */
 #define MAXTAGLOOP 100
 
@@ -490,3 +499,7 @@ void luaV_dolen(lua_State* L, StkId ra, const TValue* rb)
     }
     }
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif

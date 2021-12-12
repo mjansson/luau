@@ -7,6 +7,11 @@
 
 #include <string.h>
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#endif
+
 unsigned int luaS_hash(const char* str, size_t len)
 {
     // Note that this hashing algorithm is replicated in BytecodeBuilder.cpp, BytecodeBuilder::getStringHash
@@ -126,7 +131,7 @@ static void unlinkstrbuf(lua_State* L, TString* ts)
         }
     }
 
-    LUAU_ASSERT(!"failed to find string buffer");
+    LUAU_ASSERT(0 && "failed to find string buffer");
 }
 
 TString* luaS_bufstart(lua_State* L, size_t size)
@@ -236,3 +241,7 @@ void luaS_freeudata(lua_State* L, Udata* u)
 
     luaM_free(L, u, sizeudata(u->len), u->memcat);
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif

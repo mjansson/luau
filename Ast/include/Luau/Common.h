@@ -138,4 +138,25 @@ FValue<T>* FValue<T>::list = nullptr;
 #define LUAU_ASSERT(expr) (void)sizeof(!!(expr))
 #endif
 
+#define LUAU_FASTFLAG(flag) \
+    extern int flag
+#define LUAU_FASTFLAGVARIABLE(flag, def) \
+    extern int flag; \
+    int flag = def
+#define LUAU_FASTINT(flag) \
+    extern int flag
+#define LUAU_FASTINTVARIABLE(flag, def) \
+    extern int flag; \
+    int flag = def
+#define LUAU_DYNAMIC_FASTFLAG(flag) \
+    extern int flag
+#define LUAU_DYNAMIC_FASTFLAGVARIABLE(flag, def) \
+    extern int flag; \
+    int flag = def
+#define LUAU_DYNAMIC_FASTINT(flag) \
+    extern int flag
+#define LUAU_DYNAMIC_FASTINTVARIABLE(flag, def) \
+    extern int flag; \
+    int flag = def
+
 #endif

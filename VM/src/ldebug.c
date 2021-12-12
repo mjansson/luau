@@ -12,6 +12,13 @@
 #include <string.h>
 #include <stdio.h>
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#if __has_warning("-Wsign-conversion")
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#endif
+#endif
+
 static const char* getfuncname(Closure* f);
 
 static int currentpc(lua_State* L, CallInfo* ci)
@@ -360,7 +367,7 @@ int luaG_getline(Proto* p, int pc)
 
 void lua_singlestep(lua_State* L, int enabled)
 {
-    L->singlestep = bool(enabled);
+    L->singlestep = enabled;
 }
 
 void lua_breakpoint(lua_State* L, int funcindex, int line, int enabled)
@@ -368,7 +375,7 @@ void lua_breakpoint(lua_State* L, int funcindex, int line, int enabled)
     const TValue* func = luaA_toobject(L, funcindex);
     api_check(L, ttisfunction(func) && !clvalue(func)->isC);
 
-    luaG_breakpoint(L, clvalue(func)->l.p, line, bool(enabled));
+    luaG_breakpoint(L, clvalue(func)->l.p, line, enabled);
 }
 
 static size_t append(char* buf, size_t bufsize, size_t offset, const char* data)
@@ -435,3 +442,7 @@ const char* lua_debugtrace(lua_State* L)
 
     return buf;
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif

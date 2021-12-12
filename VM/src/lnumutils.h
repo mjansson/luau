@@ -5,6 +5,12 @@
 #include <math.h>
 #include <stdio.h>
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#pragma clang diagnostic ignored "-Wfloat-equal"
+#endif
+
 #define luai_numadd(a, b) ((a) + (b))
 #define luai_numsub(a, b) ((a) - (b))
 #define luai_nummul(a, b) ((a) * (b))
@@ -16,7 +22,7 @@
 #define luai_numlt(a, b) ((a) < (b))
 #define luai_numle(a, b) ((a) <= (b))
 
-inline int luai_veceq(const float* a, const float* b)
+static inline int luai_veceq(const float* a, const float* b)
 {
 #if LUA_VECTOR_SIZE == 4
     return a[0] == b[0] && a[1] == b[1] && a[2] == b[2] && a[3] == b[3];
@@ -25,7 +31,7 @@ inline int luai_veceq(const float* a, const float* b)
 #endif
 }
 
-inline int luai_vecisnan(const float* a)
+static inline int luai_vecisnan(const float* a)
 {
 #if LUA_VECTOR_SIZE == 4
     return a[0] != a[0] || a[1] != a[1] || a[2] != a[2] || a[3] != a[3];
@@ -35,7 +41,7 @@ inline int luai_vecisnan(const float* a)
 }
 
 LUAU_FASTMATH_BEGIN
-inline double luai_nummod(double a, double b)
+static inline double luai_nummod(double a, double b)
 {
     return a - floor(a / b) * b;
 }
@@ -58,3 +64,7 @@ LUAU_FASTMATH_END
 
 #define luai_num2str(s, n) snprintf((s), sizeof(s), LUA_NUMBER_FMT, (n))
 #define luai_str2num(s, p) strtod((s), (p))
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif

@@ -24,13 +24,19 @@
 
 #include <string.h>
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#pragma clang diagnostic ignored "-Wfloat-equal"
+#pragma clang diagnostic ignored "-Wcast-qual"
+#endif
+
 #ifdef _MSC_VER
 #pragma warning(disable : 4706)
 #pragma warning(disable : 4709)
 #endif
 
-/* TODO: C++
-LUAU_FASTFLAGVARIABLE(LuauArrayBoundary, false)*/
+LUAU_FASTFLAGVARIABLE(LuauArrayBoundary, 0);
 
 // max size of both array and hash part is 2^MAXBITS
 #define MAXBITS 26
@@ -229,9 +235,9 @@ int luaH_next(lua_State* L, Table* t, StkId key)
 */
 
 #define maybesetaboundary(t, boundary) \
-    { /* TODO: C++ */ \
-        /*if (FFlag::LuauArrayBoundary && t->aboundary <= 0)*/ \
-        /*    t->aboundary = -int(boundary); */ \
+    { \
+        if (LuauArrayBoundary && t->aboundary <= 0) \
+            t->aboundary = -(int)(boundary); \
     }
 
 #define getaboundary(t) (t->aboundary < 0 ? -t->aboundary : t->sizearray)
@@ -713,8 +719,7 @@ int luaH_getn(Table* t)
 {
     int boundary = getaboundary(t);
 
-    /* TODO: C++
-    if (FFlag::LuauArrayBoundary && boundary > 0)
+    if (LuauArrayBoundary && boundary > 0)
     {
         if (!ttisnil(&t->array[t->sizearray - 1]) && t->node == dummynode)
             return t->sizearray; // fast-path: the end of the array in `t' already refers to a boundary
@@ -724,7 +729,7 @@ int luaH_getn(Table* t)
         int foundboundary = updateaboundary(t, boundary);
         if (foundboundary > 0)
             return foundboundary;
-    }*/
+    }
 
     int j = t->sizearray;
 
@@ -815,3 +820,7 @@ void luaH_clear(Table* tt)
     /* back to empty -> no tag methods present */
     tt->flags = cast_byte(~0);
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif

@@ -7,6 +7,11 @@
 #include <math.h>
 #include <time.h>
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#endif
+
 #undef PI
 #define PI (3.14159265358979323846)
 #define RADIANS_PER_DEGREE (PI / 180.0)
@@ -243,7 +248,7 @@ static int math_random(lua_State* L)
         int u = luaL_checkinteger(L, 1);
         luaL_argcheck(L, 1 <= u, 1, "interval is empty");
 
-        uint64_t x = (uint64_t)(u) * pcg32_random(&g->rngstate);
+        uint64_t x = (uint64_t)(u)*pcg32_random(&g->rngstate);
         int r = (int)(1 + (x >> 32));
         lua_pushinteger(L, r); /* int between 1 and `u' */
         break;
@@ -257,7 +262,7 @@ static int math_random(lua_State* L)
         uint32_t ul = (uint32_t)(u) - (uint32_t)(l);
         luaL_argcheck(L, ul < UINT_MAX, 2, "interval is too large"); // -INT_MIN..INT_MAX interval can result in integer overflow
         uint64_t x = (uint64_t)(ul + 1) * pcg32_random(&g->rngstate);
-        int r = (int)(l + (x >> 32));
+        int r = (int)(l + (int)(x >> 32));
         lua_pushinteger(L, r); /* int between `l' and `u' */
         break;
     }
@@ -271,7 +276,7 @@ static int math_randomseed(lua_State* L)
 {
     int seed = luaL_checkinteger(L, 1);
 
-    pcg32_seed(&L->global->rngstate, seed);
+    pcg32_seed(&L->global->rngstate, (uint64_t)seed);
     return 0;
 }
 
@@ -320,9 +325,9 @@ static float perlin(float x, float y, float z)
     float yflr = floorf(y);
     float zflr = floorf(z);
 
-    int xi = (int)(xflr) & 255;
-    int yi = (int)(yflr) & 255;
-    int zi = (int)(zflr) & 255;
+    int xi = (int)(xflr)&255;
+    int yi = (int)(yflr)&255;
+    int zi = (int)(zflr)&255;
 
     float xf = x - xflr;
     float yf = y - yflr;
@@ -354,9 +359,9 @@ static int math_noise(lua_State* L)
     double y = luaL_optnumber(L, 2, 0.0);
     double z = luaL_optnumber(L, 3, 0.0);
 
-    double r = perlin((float)x, (float)y, (float)z);
+    float r = perlin((float)x, (float)y, (float)z);
 
-    lua_pushnumber(L, r);
+    lua_pushnumber(L, (double)r);
 
     return 1;
 }
@@ -431,7 +436,7 @@ static const luaL_Reg mathlib[] = {
 int luaopen_math(lua_State* L)
 {
     uint64_t seed = (uintptr_t)(L);
-    seed ^= time(NULL);
+    seed ^= (uint64_t)time(NULL);
     seed ^= clock();
 
     pcg32_seed(&L->global->rngstate, seed);
@@ -443,3 +448,7 @@ int luaopen_math(lua_State* L)
     lua_setfield(L, -2, "huge");
     return 1;
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif

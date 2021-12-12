@@ -6,6 +6,11 @@
 #include "lmem.h"
 #include "lgc.h"
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#endif
+
 Proto* luaF_newproto(lua_State* L)
 {
     Proto* f = luaM_new(L, Proto, sizeof(Proto), L->activememcat);

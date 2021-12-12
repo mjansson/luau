@@ -5,7 +5,13 @@
 #include "lcommon.h"
 #include "lnumutils.h"
 
-LUAU_FASTFLAGVARIABLE(LuauBit32Count, false)
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#pragma clang diagnostic ignored "-Wfloat-equal"
+#endif
+
+LUAU_FASTFLAGVARIABLE(LuauBit32Count, 0);
 
 #define ALLONES ~0u
 #define NBITS ((int)(8 * sizeof(unsigned)))
@@ -182,7 +188,7 @@ static int b_replace(lua_State* L)
 
 static int b_countlz(lua_State* L)
 {
-    if (!FFlag::LuauBit32Count)
+    if (!LuauBit32Count)
         luaL_error(L, "bit32.countlz isn't enabled");
 
     b_uint v = luaL_checkunsigned(L, 1);
@@ -201,7 +207,7 @@ static int b_countlz(lua_State* L)
 
 static int b_countrz(lua_State* L)
 {
-    if (!FFlag::LuauBit32Count)
+    if (!LuauBit32Count)
         luaL_error(L, "bit32.countrz isn't enabled");
 
     b_uint v = luaL_checkunsigned(L, 1);
@@ -242,3 +248,7 @@ int luaopen_bit32(lua_State* L)
 
     return 1;
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif

@@ -11,6 +11,14 @@
 
 #include <math.h>
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#pragma clang diagnostic ignored "-Wfloat-equal"
+#pragma clang diagnostic ignored "-Wunused-parameter"
+#pragma clang diagnostic ignored "-Wcast-qual"
+#endif
+
 #ifdef _MSC_VER
 #include <intrin.h>
 #pragma warning(disable : 4100)
@@ -1058,7 +1066,7 @@ static int luauF_countlz(lua_State* L, StkId res, TValue* arg0, int nresults, St
         int r = n == 0 ? 32 : __builtin_clz(n);
 #endif
 
-        setnvalue(res, double(r));
+        setnvalue(res, (double)(r));
         return 1;
     }
 
@@ -1081,7 +1089,7 @@ static int luauF_countrz(lua_State* L, StkId res, TValue* arg0, int nresults, St
         int r = n == 0 ? 32 : __builtin_ctz(n);
 #endif
 
-        setnvalue(res, double(r));
+        setnvalue(res, (double)(r));
         return 1;
     }
 
@@ -1158,3 +1166,7 @@ luau_FastFunction luauF_table[256] = {
     luauF_countlz,
     luauF_countrz,
 };
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif

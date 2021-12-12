@@ -2,6 +2,13 @@
 // This code is based on Lua 5.x implementation licensed under MIT License; see lua_LICENSE.txt for details
 #include "lapi.h"
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#pragma clang diagnostic ignored "-Wcast-qual"
+#pragma clang diagnostic ignored "-Wfloat-equal"
+#endif
+
 #include "lstate.h"
 #include "lstring.h"
 #include "ltable.h"
@@ -14,16 +21,16 @@
 #include <string.h>
 #include <stdint.h>
 
-/* TODO: C++
-LUAU_FASTFLAG(LuauActivateBeforeExec)
-*/
+LUAU_FASTFLAG(LuauActivateBeforeExec);
 
+#if 0
 const char* lua_ident = "$Lua: Lua 5.1.4 Copyright (C) 1994-2008 Lua.org, PUC-Rio $\n"
                         "$Authors: R. Ierusalimschy, L. H. de Figueiredo & W. Celes $\n"
                         "$URL: www.lua.org $\n";
 
 const char* luau_ident = "$Luau: Copyright (C) 2019-2021 Roblox Corporation $\n"
                          "$URL: luau-lang.org $\n";
+#endif
 
 #define api_checknelems(L, n) api_check(L, (n) <= (L->top - L->base))
 
@@ -943,7 +950,7 @@ void lua_call(lua_State* L, int nargs, int nresults)
     checkresults(L, nargs, nresults);
     func = L->top - (nargs + 1);
 
-    if (FFlag::LuauActivateBeforeExec)
+    if (LuauActivateBeforeExec)
     {
         luaD_call(L, func, nresults);
     }
@@ -998,7 +1005,7 @@ int lua_pcall(lua_State* L, int nargs, int nresults, int errfunc)
     c.func = L->top - (nargs + 1); /* function to be called */
     c.nresults = nresults;
 
-    if (FFlag::LuauActivateBeforeExec)
+    if (LuauActivateBeforeExec)
     {
         status = luaD_pcall(L, f_call, &c, savestack(L, c.func), func);
     }
@@ -1321,3 +1328,7 @@ lua_Callbacks* lua_callbacks(lua_State* L)
 {
     return &L->global->cb;
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif

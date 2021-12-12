@@ -10,6 +10,12 @@
 
 #include <string.h>
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#pragma clang diagnostic ignored "-Wcast-align"
+#endif
+
 /* convert a stack index to positive */
 #define abs_index(L, i) ((i) > 0 || (i) <= LUA_REGISTRYINDEX ? (i) : lua_gettop(L) + (i) + 1)
 
@@ -297,7 +303,7 @@ void luaL_register(lua_State* L, const char* libname, const luaL_Reg* l)
     }
     for (; l->name; l++)
     {
-        lua_pushcfunction_full(L, l->func, l->name, 0, 0);
+        lua_pushcclosurek(L, l->func, l->name, 0, 0);
         lua_setfield(L, -2, l->name);
     }
 }
@@ -494,9 +500,10 @@ const char* luaL_tolstring(lua_State* L, int idx, size_t* len)
     {
         const float* v = lua_tovector(L, idx);
 #if LUA_VECTOR_SIZE == 4
-        lua_pushfstring(L, LUA_NUMBER_FMT ", " LUA_NUMBER_FMT ", " LUA_NUMBER_FMT ", " LUA_NUMBER_FMT, v[0], v[1], v[2], v[3]);
+        lua_pushfstring(
+            L, LUA_NUMBER_FMT ", " LUA_NUMBER_FMT ", " LUA_NUMBER_FMT ", " LUA_NUMBER_FMT, (double)v[0], (double)v[1], (double)v[2], (double)v[3]);
 #else
-        lua_pushfstring(L, LUA_NUMBER_FMT ", " LUA_NUMBER_FMT ", " LUA_NUMBER_FMT, v[0], v[1], v[2]);
+        lua_pushfstring(L, LUA_NUMBER_FMT ", " LUA_NUMBER_FMT ", " LUA_NUMBER_FMT, (double)v[0], (double)v[1], (double)v[2]);
 #endif
         break;
     }
@@ -510,3 +517,7 @@ const char* luaL_tolstring(lua_State* L, int idx, size_t* len)
     }
     return lua_tolstring(L, -1, len);
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif

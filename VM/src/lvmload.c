@@ -13,6 +13,12 @@
 
 #include <string.h>
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#pragma clang diagnostic ignored "-Wcast-align"
+#endif
+
 void luaV_getimport(lua_State* L, Table* env, TValue* k, uint32_t id, int propagatenil)
 {
     int count = id >> 30;
@@ -277,7 +283,7 @@ int luau_load(lua_State* L, const char* chunkname, const char* data, size_t size
             }
 
             default:
-                LUAU_ASSERT(!"Unexpected constant kind");
+                LUAU_ASSERT(0 && "Unexpected constant kind");
             }
         }
 
@@ -363,3 +369,7 @@ int luau_load(lua_State* L, const char* chunkname, const char* data, size_t size
 
     return 0;
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif

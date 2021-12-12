@@ -21,6 +21,11 @@
 #if __has_warning("-Wc99-designator")
 #pragma clang diagnostic ignored "-Wc99-designator"
 #endif
+#pragma clang diagnostic ignored "-Wfloat-equal"
+#pragma clang diagnostic ignored "-Wcast-align"
+#pragma clang diagnostic ignored "-Wcast-qual"
+#pragma clang diagnostic ignored "-Wdouble-promotion"
+#pragma clang diagnostic ignored "-Wsign-conversion"
 #endif
 #ifdef _MSC_VER
 #pragma warning(disable : 4706)
@@ -123,7 +128,7 @@
  */
 #if VM_USE_CGOTO
 #define VM_CASE(op) CASE_##op:
-#define VM_NEXT() goto*(SingleStep ? &&dispatch : kDispatchTable[*(uint8_t*)pc])
+#define VM_NEXT() goto*(L->singlestep ? &&dispatch : kDispatchTable[*(uint8_t*)pc])
 #define VM_CONTINUE(op) goto* kDispatchTable[(uint8_t)(op)]
 #else
 #define VM_CASE(op) case op:
@@ -288,12 +293,12 @@ LUAU_NOINLINE void luau_callhook(lua_State* L, lua_Hook hook, void* userdata)
     }
 }
 
-inline int luau_skipstep(uint8_t op)
+static inline int luau_skipstep(uint8_t op)
 {
     return op == LOP_PREPVARARGS || op == LOP_BREAK;
 }
 
-static void luau_execute(lua_State* L)
+void luau_execute(lua_State* L)
 {
 #if VM_USE_CGOTO
     static const void* kDispatchTable[256] = {VM_DISPATCH_TABLE()};
@@ -888,7 +893,7 @@ static void luau_execute(lua_State* L)
                         break;
 
                     default:
-                        LUAU_ASSERT(!"Unknown upvalue capture type");
+                        LUAU_ASSERT(0 && "Unknown upvalue capture type");
                     }
                 }
 
@@ -2587,7 +2592,7 @@ static void luau_execute(lua_State* L)
 
             VM_CASE(LOP_CAPTURE)
             {
-                LUAU_ASSERT(!"CAPTURE is a pseudo-opcode and must be executed as part of NEWCLOSURE");
+                LUAU_ASSERT(0 && "CAPTURE is a pseudo-opcode and must be executed as part of NEWCLOSURE");
                 LUAU_UNREACHABLE();
             }
 
@@ -2626,7 +2631,7 @@ static void luau_execute(lua_State* L)
                     default:;
                     }
 
-                    LUAU_ASSERT(!"Constant is expected to be of primitive type");
+                    LUAU_ASSERT(0 && "Constant is expected to be of primitive type");
                 }
                 else
                 {
@@ -2671,7 +2676,7 @@ static void luau_execute(lua_State* L)
                     default:;
                     }
 
-                    LUAU_ASSERT(!"Constant is expected to be of primitive type");
+                    LUAU_ASSERT(0 && "Constant is expected to be of primitive type");
                 }
                 else
                 {

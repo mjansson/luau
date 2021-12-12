@@ -5,9 +5,7 @@
 #include "lstate.h"
 #include "lvm.h"
 
-/* TODO: C++
-LUAU_FASTFLAGVARIABLE(LuauCoroutineClose, false)
-*/
+LUAU_FASTFLAGVARIABLE(LuauCoroutineClose, 0);
 
 #define CO_RUN 0 /* running */
 #define CO_SUS 1 /* suspended */
@@ -239,7 +237,7 @@ static int coyieldable(lua_State* L)
 
 static int coclose(lua_State* L)
 {
-    if (!FFlag::LuauCoroutineClose)
+    if (!LuauCoroutineClose)
         luaL_error(L, "coroutine.close is not enabled");
 
     lua_State* co = lua_tothread(L, 1);
@@ -251,7 +249,7 @@ static int coclose(lua_State* L)
 
     if (co->status == LUA_OK || co->status == LUA_YIELD)
     {
-        lua_pushboolean(L, true);
+        lua_pushboolean(L, 1);
         lua_resetthread(co);
         return 1;
     }

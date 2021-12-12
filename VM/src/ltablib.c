@@ -9,6 +9,12 @@
 #include "ldebug.h"
 #include "lvm.h"
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#pragma clang diagnostic ignored "-Wcomma"
+#endif
+
 static int foreachi(lua_State* L)
 {
     luaL_checktype(L, 1, LUA_TTABLE);
@@ -532,8 +538,12 @@ int luaopen_table(lua_State* L)
     luaL_register(L, LUA_TABLIBNAME, tab_funcs);
 
     // Lua 5.1 compat
-    lua_pushcfunction_full(L, tunpack, "unpack", 0, 0);
+    lua_pushcclosurek(L, tunpack, "unpack", 0, 0);
     lua_setglobal(L, "unpack");
 
     return 1;
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif

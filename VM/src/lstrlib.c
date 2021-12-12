@@ -1,8 +1,10 @@
 // This file is part of the Luau programming language and is licensed under MIT License; see LICENSE.txt for details
 // This code is based on Lua 5.x implementation licensed under MIT License; see lua_LICENSE.txt for details
 
+#ifdef _WIN32
 #undef _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS 1
+#endif
 
 #include "lualib.h"
 
@@ -12,7 +14,12 @@
 #include <string.h>
 #include <stdio.h>
 
-LUAU_FASTFLAGVARIABLE(LuauStrPackUBCastFix, false)
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#pragma clang diagnostic ignored "-Wbad-function-cast"
+#pragma clang diagnostic ignored "-Wformat-nonliteral"
+#endif
 
 /* macro to `unsign' a character */
 #define uchar(c) ((unsigned char)(c))
@@ -752,11 +759,7 @@ static int gmatch(lua_State* L)
     luaL_checkstring(L, 2);
     lua_settop(L, 2);
     lua_pushinteger(L, 0);
-<<<<<<< HEAD:VM/src/lstrlib.c
-    lua_pushcfunction_full(L, gmatch_aux, 0, 3, 0);
-=======
     lua_pushcclosure(L, gmatch_aux, NULL, 3);
->>>>>>> upstream/master:VM/src/lstrlib.cpp
     return 1;
 }
 
@@ -1357,7 +1360,7 @@ static void packint(luaL_Buffer* b, unsigned long long n, int islittle, int size
     if (neg && size > SZINT)
     {                                  /* negative number need sign extension? */
         for (i = SZINT; i < size; i++) /* correct extra bytes */
-            buff[islittle ? i : size - 1 - i] = MC;
+            buff[islittle ? i : size - 1 - i] = (char)MC;
     }
     luaL_addlstring(b, buff, size); /* add result to buffer */
 }
@@ -1414,20 +1417,10 @@ static int str_pack(lua_State* L)
         }
         case Kuint:
         { /* unsigned integers */
-            if (FFlag::LuauStrPackUBCastFix)
-            {
-                long long n = (long long)luaL_checknumber(L, arg);
-                if (size < SZINT) /* need overflow check? */
-                    luaL_argcheck(L, (unsigned long long)n < ((unsigned long long)1 << (size * NB)), arg, "unsigned overflow");
-                packint(&b, (unsigned long long)n, h.islittle, size, 0);
-            }
-            else
-            {
-                unsigned long long n = (unsigned long long)luaL_checknumber(L, arg);
-                if (size < SZINT) /* need overflow check? */
-                    luaL_argcheck(L, n < ((unsigned long long)1 << (size * NB)), arg, "unsigned overflow");
-                packint(&b, n, h.islittle, size, 0);
-            }
+            long long n = (long long)luaL_checknumber(L, arg);
+            if (size < SZINT) /* need overflow check? */
+                luaL_argcheck(L, (unsigned long long)n < ((unsigned long long)1 << (size * NB)), arg, "unsigned overflow");
+            packint(&b, (unsigned long long)n, h.islittle, size, 0);
             break;
         }
         case Kfloat:
@@ -1672,3 +1665,7 @@ int luaopen_string(lua_State* L)
 
     return 1;
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif

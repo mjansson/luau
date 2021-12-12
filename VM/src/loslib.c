@@ -5,6 +5,11 @@
 #include <string.h>
 #include <time.h>
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wbad-function-cast"
+#endif
+
 #define LUA_STRFTIMEOPTIONS "aAbBcdHIjmMpSUwWxXyYzZ%"
 
 #if defined(_WIN32)
@@ -191,3 +196,7 @@ int luaopen_os(lua_State* L)
     luaL_register(L, LUA_OSLIBNAME, syslib);
     return 1;
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif

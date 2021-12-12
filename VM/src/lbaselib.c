@@ -10,6 +10,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wfloat-equal"
+#endif
+
 static void writestring(const char* s, size_t l)
 {
     fwrite(s, 1, l, stdout);
@@ -196,7 +201,7 @@ static int luaB_typeof(lua_State* L)
     return 1;
 }
 
-int luaB_next(lua_State* L)
+static int luaB_next(lua_State* L)
 {
     luaL_checktype(L, 1, LUA_TTABLE);
     lua_settop(L, 2); /* create a 2nd argument if there isn't one */
@@ -218,7 +223,7 @@ static int luaB_pairs(lua_State* L)
     return 3;
 }
 
-int luaB_inext(lua_State* L)
+static int luaB_inext(lua_State* L)
 {
     int i = luaL_checkinteger(L, 2);
     luaL_checktype(L, 1, LUA_TTABLE);
@@ -464,3 +469,7 @@ int luaopen_base(lua_State* L)
 
     return 1;
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif

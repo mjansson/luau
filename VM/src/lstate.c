@@ -10,6 +10,13 @@
 #include "ldo.h"
 #include "ldebug.h"
 
+#include <string.h>
+
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#endif
+
 /*
 ** Main thread combines a thread state and the global state
 */
@@ -126,8 +133,8 @@ void luaE_freethread(lua_State* L, lua_State* L1)
 }
 
 static int lua_has_setup;
-extern void lua_setupmemsizeclassconfig();
-extern void lua_setupclock();
+extern void lua_setupmemsizeclassconfig(void);
+extern void lua_setupclock(void);
 
 void lua_resetthread(lua_State* L)
 {
@@ -236,3 +243,7 @@ void lua_close(lua_State* L)
     luaF_close(L, L->stack);   /* close all upvalues for this thread */
     close_state(L);
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif

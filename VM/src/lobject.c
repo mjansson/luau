@@ -1,8 +1,10 @@
 // This file is part of the Luau programming language and is licensed under MIT License; see LICENSE.txt for details
 // This code is based on Lua 5.x implementation licensed under MIT License; see lua_LICENSE.txt for details
 
+#ifdef _WIN32
 #undef _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS 1
+#endif
 
 #include "lobject.h"
 
@@ -17,7 +19,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wfloat-equal"
+#pragma clang diagnostic ignored "-Wformat-nonliteral"
+#endif
 
 const TValue luaO_nilobject_ = {{0}, {0}, LUA_TNIL};
 
@@ -162,3 +168,7 @@ void luaO_chunkid(char* out, const char* source, size_t bufflen)
         strcat(out, "\"]");
     }
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif

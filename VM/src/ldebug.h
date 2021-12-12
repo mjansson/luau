@@ -4,6 +4,13 @@
 
 #include "lstate.h"
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#if __has_warning("-Wgnu-zero-variadic-macro-arguments")
+#pragma clang diagnostic ignored "-Wgnu-zero-variadic-macro-arguments"
+#endif
+#endif
+
 #define pcRel(pc, p) ((pc) ? cast_to(int, (pc) - (p)->code) - 1 : 0)
 
 #define luaG_typeerror(L, o, opname) luaG_typeerrorL(L, o, opname)
@@ -26,3 +33,7 @@ LUAI_FUNC void luaG_breakpoint(lua_State* L, Proto* p, int line, int enable);
 LUAI_FUNC int luaG_onbreak(lua_State* L);
 
 LUAI_FUNC int luaG_getline(Proto* p, int pc);
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif

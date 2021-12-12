@@ -4,6 +4,11 @@
 
 #include "lcommon.h"
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#endif
+
 #define MAXUNICODE 0x10FFFF
 
 #define iscont(p) ((*(p)&0xC0) == 0x80)
@@ -292,3 +297,7 @@ int luaopen_utf8(lua_State* L)
 
     return 1;
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
