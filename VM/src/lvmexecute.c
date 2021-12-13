@@ -21,6 +21,9 @@
 #if __has_warning("-Wc99-designator")
 #pragma clang diagnostic ignored "-Wc99-designator"
 #endif
+#if __has_warning("-Wgnu-label-as-value")
+#pragma clang diagnostic ignored "-Wgnu-label-as-value"
+#endif
 #pragma clang diagnostic ignored "-Wfloat-equal"
 #pragma clang diagnostic ignored "-Wcast-align"
 #pragma clang diagnostic ignored "-Wcast-qual"
