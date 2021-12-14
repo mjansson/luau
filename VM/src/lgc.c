@@ -401,7 +401,7 @@ static size_t cleartable(lua_State* L, GCObject* l)
     while (l)
     {
         Table* h = gco2h(l);
-        work += sizeof(Table) + sizeof(TValue) * h->sizearray + sizeof(LuaNode) * sizenode(h);
+        work += sizeof(Table) + sizeof(TValue) * (size_t)h->sizearray + sizeof(LuaNode) * (size_t)sizenode(h);
 
         int i = h->sizearray;
         while (i--)
