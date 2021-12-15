@@ -23,6 +23,7 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wfloat-equal"
 #pragma clang diagnostic ignored "-Wformat-nonliteral"
+#pragma clang diagnostic ignored "-Wextra-semi-stmt"
 #endif
 
 const TValue luaO_nilobject_ = {{0}, {0}, LUA_TNIL};

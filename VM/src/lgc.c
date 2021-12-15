@@ -14,6 +14,7 @@
 #ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"
+#pragma clang diagnostic ignored "-Wextra-semi-stmt"
 #endif
 
 LUAU_FASTFLAGVARIABLE(LuauSeparateAtomic, 0);
@@ -848,7 +849,7 @@ static size_t getheaptrigger(global_State* g, size_t heapgoal)
     if (allocationduration < durationthreshold)
         return heapgoal;
 
-    double allocationrate = (currcycle->atomicstarttotalsizebytes - lastcycle->endtotalsizebytes) / allocationduration;
+    double allocationrate = (double)(currcycle->atomicstarttotalsizebytes - lastcycle->endtotalsizebytes) / allocationduration;
     double markduration = currcycle->atomicstarttimestamp - currcycle->starttimestamp;
 
     int64_t expectedgrowth = (int64_t)(markduration * allocationrate);
@@ -1065,7 +1066,7 @@ int64_t luaC_allocationrate(lua_State* L)
         if (duration < durationthreshold)
             return -1;
 
-        return (int64_t)((g->totalbytes - g->gcstats.lastcycle.endtotalsizebytes) / duration);
+        return (int64_t)((double)(g->totalbytes - g->gcstats.lastcycle.endtotalsizebytes) / duration);
     }
 
     // totalbytes is unstable during the sweep, use the rate measured at the end of mark phase
@@ -1074,7 +1075,7 @@ int64_t luaC_allocationrate(lua_State* L)
     if (duration < durationthreshold)
         return -1;
 
-    return (int64_t)((g->gcstats.currcycle.atomicstarttotalsizebytes - g->gcstats.lastcycle.endtotalsizebytes) / duration);
+    return (int64_t)((double)(g->gcstats.currcycle.atomicstarttotalsizebytes - g->gcstats.lastcycle.endtotalsizebytes) / duration);
 }
 
 void luaC_wakethread(lua_State* L)

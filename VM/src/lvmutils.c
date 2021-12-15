@@ -18,6 +18,7 @@
 #pragma clang diagnostic ignored "-Wcast-align"
 #pragma clang diagnostic ignored "-Wswitch-enum"
 #pragma clang diagnostic ignored "-Wfloat-equal"
+#pragma clang diagnostic ignored "-Wextra-semi-stmt"
 #endif
 
 /* limit for table tag-method chains (to avoid loops) */

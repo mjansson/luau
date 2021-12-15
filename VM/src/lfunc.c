@@ -9,6 +9,7 @@
 #ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"
+#pragma clang diagnostic ignored "-Wextra-semi-stmt"
 #endif
 
 Proto* luaF_newproto(lua_State* L)

@@ -16,6 +16,7 @@
 #pragma clang diagnostic push
 #if __has_warning("-Wsign-conversion")
 #pragma clang diagnostic ignored "-Wsign-conversion"
+#pragma clang diagnostic ignored "-Wextra-semi-stmt"
 #endif
 #endif
 

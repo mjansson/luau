@@ -17,6 +17,7 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"
 #pragma clang diagnostic ignored "-Wcast-align"
+#pragma clang diagnostic ignored "-Wextra-semi-stmt"
 #endif
 
 void luaV_getimport(lua_State* L, Table* env, TValue* k, uint32_t id, int propagatenil)

@@ -39,9 +39,9 @@ static double clock_timestamp()
 #elif defined(__APPLE__)
     return (double)(mach_absolute_time());
 #elif defined(__linux__)
-    timespec now;
+    struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
-    return now.tv_sec * 1e9 + now.tv_nsec;
+    return ((double)now.tv_sec * 1e9) + (double)now.tv_nsec;
 #else
     return (double)(clock());
 #endif

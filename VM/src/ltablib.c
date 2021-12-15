@@ -13,6 +13,7 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"
 #pragma clang diagnostic ignored "-Wcomma"
+#pragma clang diagnostic ignored "-Wextra-semi-stmt"
 #endif
 
 static int foreachi(lua_State* L)

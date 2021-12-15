@@ -13,6 +13,7 @@
 #ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wfloat-equal"
+#pragma clang diagnostic ignored "-Wextra-semi-stmt"
 #endif
 
 static void writestring(const char* s, size_t l)

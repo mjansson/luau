@@ -17,6 +17,7 @@
 #pragma clang diagnostic ignored "-Wfloat-equal"
 #pragma clang diagnostic ignored "-Wunused-parameter"
 #pragma clang diagnostic ignored "-Wcast-qual"
+#pragma clang diagnostic ignored "-Wextra-semi-stmt"
 #endif
 
 #ifdef _MSC_VER

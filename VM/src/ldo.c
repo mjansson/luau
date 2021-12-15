@@ -22,6 +22,7 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"
 #pragma clang diagnostic ignored "-Wcast-align"
+#pragma clang diagnostic ignored "-Wextra-semi-stmt"
 #endif
 
 LUAU_FASTFLAGVARIABLE(LuauCcallRestoreFix, 0);
