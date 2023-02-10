@@ -8,8 +8,10 @@
 namespace Luau
 {
 
+struct Scope;
+
 /**
- * The 'level' of a TypeVar is an indirect way to talk about the scope that it 'belongs' too.
+ * The 'level' of a Type is an indirect way to talk about the scope that it 'belongs' too.
  * To start, read http://okmij.org/ftp/ML/generalization.html
  *
  * We extend the idea by adding a "sub-level" which helps us to differentiate sibling scopes
@@ -24,7 +26,7 @@ struct TypeLevel
     int level = 0;
     int subLevel = 0;
 
-    // Returns true if the typelevel "this" is "bigger" than rhs
+    // Returns true if the level of "this" belongs to an equal or larger scope than that of rhs
     bool subsumes(const TypeLevel& rhs) const
     {
         if (level < rhs.level)
@@ -38,6 +40,15 @@ struct TypeLevel
         return false;
     }
 
+    // Returns true if the level of "this" belongs to a larger (not equal) scope than that of rhs
+    bool subsumesStrict(const TypeLevel& rhs) const
+    {
+        if (level == rhs.level && subLevel == rhs.subLevel)
+            return false;
+        else
+            return subsumes(rhs);
+    }
+
     TypeLevel incr() const
     {
         TypeLevel result;
@@ -47,6 +58,14 @@ struct TypeLevel
     }
 };
 
+inline TypeLevel max(const TypeLevel& a, const TypeLevel& b)
+{
+    if (a.subsumes(b))
+        return b;
+    else
+        return a;
+}
+
 inline TypeLevel min(const TypeLevel& a, const TypeLevel& b)
 {
     if (a.subsumes(b))
@@ -55,7 +74,9 @@ inline TypeLevel min(const TypeLevel& a, const TypeLevel& b)
         return b;
 }
 
-namespace Unifiable
+} // namespace Luau
+
+namespace Luau::Unifiable
 {
 
 using Name = std::string;
@@ -63,16 +84,19 @@ using Name = std::string;
 struct Free
 {
     explicit Free(TypeLevel level);
+    explicit Free(Scope* scope);
+    explicit Free(Scope* scope, TypeLevel level);
 
     int index;
     TypeLevel level;
+    Scope* scope = nullptr;
     // True if this free type variable is part of a mutually
     // recursive type alias whose definitions haven't been
     // resolved yet.
     bool forwardedTypeAlias = false;
 
 private:
-    static int nextIndex;
+    static int DEPRECATED_nextIndex;
 };
 
 template<typename Id>
@@ -92,20 +116,23 @@ struct Generic
     Generic();
     explicit Generic(TypeLevel level);
     explicit Generic(const Name& name);
+    explicit Generic(Scope* scope);
     Generic(TypeLevel level, const Name& name);
+    Generic(Scope* scope, const Name& name);
 
     int index;
     TypeLevel level;
+    Scope* scope = nullptr;
     Name name;
-    bool explicitName;
+    bool explicitName = false;
 
 private:
-    static int nextIndex;
+    static int DEPRECATED_nextIndex;
 };
 
 struct Error
 {
-    // This constructor has to be public, since it's used in TypeVar and TypePack,
+    // This constructor has to be public, since it's used in Type and TypePack,
     // but shouldn't be called directly. Please use errorRecoveryType() instead.
     Error();
 
@@ -116,7 +143,6 @@ private:
 };
 
 template<typename Id, typename... Value>
-using Variant = Variant<Free, Bound<Id>, Generic, Error, Value...>;
+using Variant = Luau::Variant<Free, Bound<Id>, Generic, Error, Value...>;
 
-} // namespace Unifiable
-} // namespace Luau
+} // namespace Luau::Unifiable

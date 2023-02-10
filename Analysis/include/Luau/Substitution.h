@@ -1,10 +1,9 @@
 // This file is part of the Luau programming language and is licensed under MIT License; see LICENSE.txt for details
 #pragma once
 
-#include "Luau/Module.h"
-#include "Luau/ModuleResolver.h"
+#include "Luau/TypeArena.h"
 #include "Luau/TypePack.h"
-#include "Luau/TypeVar.h"
+#include "Luau/Type.h"
 #include "Luau/DenseHash.h"
 
 // We provide an implementation of substitution on types,
@@ -55,6 +54,8 @@
 namespace Luau
 {
 
+struct TxnLog;
+
 enum class TarjanResult
 {
     TooManyChildren,
@@ -88,15 +89,17 @@ struct Tarjan
     std::vector<int> lowlink;
 
     int childCount = 0;
+    int childLimit = 0;
+
+    // This should never be null; ensure you initialize it before calling
+    // substitution methods.
+    const TxnLog* log = nullptr;
 
     std::vector<TypeId> edgesTy;
     std::vector<TypePackId> edgesTp;
     std::vector<TarjanWorklistVertex> worklist;
     // This is hot code, so we optimize recursion to a stack.
     TarjanResult loop();
-
-    // Clear the state
-    void clear();
 
     // Find or create the index for a vertex.
     // Return a boolean which is `true` if it's a freshly created index.
@@ -136,6 +139,8 @@ struct FindDirty : Tarjan
 {
     std::vector<bool> dirty;
 
+    void clearTarjan();
+
     // Get/set the dirty bit for an index (grows the vector if needed)
     bool getDirty(int index);
     void setDirty(int index, bool d);
@@ -160,9 +165,21 @@ struct FindDirty : Tarjan
 // and replaces them with clean ones.
 struct Substitution : FindDirty
 {
-    ModulePtr currentModule;
+protected:
+    Substitution(const TxnLog* log_, TypeArena* arena)
+        : arena(arena)
+    {
+        log = log_;
+        LUAU_ASSERT(log);
+        LUAU_ASSERT(arena);
+    }
+
+public:
+    TypeArena* arena;
     DenseHashMap<TypeId, TypeId> newTypes{nullptr};
     DenseHashMap<TypePackId, TypePackId> newPacks{nullptr};
+    DenseHashSet<TypeId> replacedTypes{nullptr};
+    DenseHashSet<TypePackId> replacedTypePacks{nullptr};
 
     std::optional<TypeId> substitute(TypeId ty);
     std::optional<TypePackId> substitute(TypePackId tp);
@@ -186,12 +203,13 @@ struct Substitution : FindDirty
     template<typename T>
     TypeId addType(const T& tv)
     {
-        return currentModule->internalTypes.addType(tv);
+        return arena->addType(tv);
     }
+
     template<typename T>
     TypePackId addTypePack(const T& tp)
     {
-        return currentModule->internalTypes.addTypePack(TypePackVar{tp});
+        return arena->addTypePack(TypePackVar{tp});
     }
 };
 

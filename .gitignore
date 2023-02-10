@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ^build/
 ^coverage/
 ^fuzz/luau.pb.*
@@ -8,3 +9,18 @@
 /.vs
 .DS_Store
 
+=======
+/build/
+/build[.-]*/
+/coverage/
+/.vs/
+/.vscode/
+/fuzz/luau.pb.*
+/crash-*
+/default.prof*
+/fuzz-*
+/luau
+/luau-tests
+/luau-analyze
+__pycache__
+>>>>>>> c5089def6e0322883a4b9cc56bf2688f781533eb

@@ -1,13 +1,19 @@
 // This file is part of the Luau programming language and is licensed under MIT License; see LICENSE.txt for details
 #include "Luau/Error.h"
 
-#include "Luau/Module.h"
+#include "Luau/Clone.h"
+#include "Luau/Common.h"
+#include "Luau/FileResolver.h"
 #include "Luau/StringUtils.h"
 #include "Luau/ToString.h"
 
 #include <stdexcept>
+#include <type_traits>
 
-static std::string wrongNumberOfArgsString(size_t expectedCount, size_t actualCount, const char* argPrefix = nullptr, bool isVariadic = false)
+LUAU_FASTFLAGVARIABLE(LuauTypeMismatchInvarianceInError, false)
+
+static std::string wrongNumberOfArgsString(
+    size_t expectedCount, std::optional<size_t> maximumCount, size_t actualCount, const char* argPrefix = nullptr, bool isVariadic = false)
 {
     std::string s = "expects ";
 
@@ -16,11 +22,14 @@ static std::string wrongNumberOfArgsString(size_t expectedCount, size_t actualCo
 
     s += std::to_string(expectedCount) + " ";
 
+    if (maximumCount && expectedCount != *maximumCount)
+        s += "to " + std::to_string(*maximumCount) + " ";
+
     if (argPrefix)
         s += std::string(argPrefix) + " ";
 
     s += "argument";
-    if (expectedCount != 1)
+    if ((maximumCount ? *maximumCount : expectedCount) != 1)
         s += "s";
 
     s += ", but ";
@@ -49,22 +58,57 @@ namespace Luau
 
 struct ErrorConverter
 {
+    FileResolver* fileResolver = nullptr;
+
     std::string operator()(const Luau::TypeMismatch& tm) const
     {
-        std::string result = "Type '" + Luau::toString(tm.givenType) + "' could not be converted into '" + Luau::toString(tm.wantedType) + "'";
+        std::string givenTypeName = Luau::toString(tm.givenType);
+        std::string wantedTypeName = Luau::toString(tm.wantedType);
+
+        std::string result;
+
+        if (givenTypeName == wantedTypeName)
+        {
+            if (auto givenDefinitionModule = getDefinitionModuleName(tm.givenType))
+            {
+                if (auto wantedDefinitionModule = getDefinitionModuleName(tm.wantedType))
+                {
+                    if (fileResolver != nullptr)
+                    {
+                        std::string givenModuleName = fileResolver->getHumanReadableModuleName(*givenDefinitionModule);
+                        std::string wantedModuleName = fileResolver->getHumanReadableModuleName(*wantedDefinitionModule);
+                        result = "Type '" + givenTypeName + "' from '" + givenModuleName + "' could not be converted into '" + wantedTypeName +
+                                 "' from '" + wantedModuleName + "'";
+                    }
+                    else
+                    {
+                        result = "Type '" + givenTypeName + "' from '" + *givenDefinitionModule + "' could not be converted into '" + wantedTypeName +
+                                 "' from '" + *wantedDefinitionModule + "'";
+                    }
+                }
+            }
+        }
+
+        if (result.empty())
+            result = "Type '" + givenTypeName + "' could not be converted into '" + wantedTypeName + "'";
+
 
         if (tm.error)
         {
             result += "\ncaused by:\n  ";
 
             if (!tm.reason.empty())
-                result += tm.reason + ". ";
+                result += tm.reason + " ";
 
-            result += Luau::toString(*tm.error);
+            result += Luau::toString(*tm.error, TypeErrorToStringOptions{fileResolver});
         }
         else if (!tm.reason.empty())
         {
             result += "; " + tm.reason;
+        }
+        else if (FFlag::LuauTypeMismatchInvarianceInError && tm.context == TypeMismatch::InvariantContext)
+        {
+            result += " in an invariant context";
         }
 
         return result;
@@ -78,8 +122,6 @@ struct ErrorConverter
             return "Unknown global '" + e.name + "'";
         case UnknownSymbol::Type:
             return "Unknown type '" + e.name + "'";
-        case UnknownSymbol::Generic:
-            return "Unknown generic '" + e.name + "'";
         }
 
         LUAU_ASSERT(!"Unexpected context for UnknownSymbol");
@@ -89,9 +131,9 @@ struct ErrorConverter
     std::string operator()(const Luau::UnknownProperty& e) const
     {
         TypeId t = follow(e.table);
-        if (get<TableTypeVar>(t))
+        if (get<TableType>(t))
             return "Key '" + e.key + "' not found in table '" + Luau::toString(t) + "'";
-        else if (get<ClassTypeVar>(t))
+        else if (get<ClassType>(t))
             return "Key '" + e.key + "' not found in class '" + Luau::toString(t) + "'";
         else
             return "Type '" + Luau::toString(e.table) + "' does not have key '" + e.key + "'";
@@ -125,7 +167,10 @@ struct ErrorConverter
 
     std::string operator()(const Luau::DuplicateTypeDefinition& e) const
     {
-        return "Redefinition of type '" + e.name + "', previously defined at line " + std::to_string(e.previousLocation.begin.line + 1);
+        std::string s = "Redefinition of type '" + e.name + "'";
+        if (e.previousLocation)
+            s += ", previously defined at line " + std::to_string(e.previousLocation->begin.line + 1);
+        return s;
     }
 
     std::string operator()(const Luau::CountMismatch& e) const
@@ -139,13 +184,21 @@ struct ErrorConverter
         case CountMismatch::Return:
             return "Expected to return " + std::to_string(e.expected) + " value" + expectedS + ", but " + std::to_string(e.actual) + " " +
                    actualVerb + " returned here";
-        case CountMismatch::Result:
+        case CountMismatch::FunctionResult:
             // It is alright if right hand side produces more values than the
             // left hand side accepts. In this context consider only the opposite case.
-            return "Function only returns " + std::to_string(e.expected) + " value" + expectedS + ". " + std::to_string(e.actual) +
-                   " are required here";
+            return "Function only returns " + std::to_string(e.expected) + " value" + expectedS + ", but " + std::to_string(e.actual) + " " +
+                   actualVerb + " required here";
+        case CountMismatch::ExprListResult:
+            return "Expression list has " + std::to_string(e.expected) + " value" + expectedS + ", but " + std::to_string(e.actual) + " " +
+                   actualVerb + " required here";
         case CountMismatch::Arg:
-            return "Argument count mismatch. Function " + wrongNumberOfArgsString(e.expected, e.actual);
+            if (!e.function.empty())
+                return "Argument count mismatch. Function '" + e.function + "' " +
+                       wrongNumberOfArgsString(e.expected, e.maximum, e.actual, /*argPrefix*/ nullptr, e.isVariadic);
+            else
+                return "Argument count mismatch. Function " +
+                       wrongNumberOfArgsString(e.expected, e.maximum, e.actual, /*argPrefix*/ nullptr, e.isVariadic);
         }
 
         LUAU_ASSERT(!"Unknown context");
@@ -159,15 +212,7 @@ struct ErrorConverter
 
     std::string operator()(const Luau::FunctionRequiresSelf& e) const
     {
-        if (e.requiredExtraNils)
-        {
-            const char* plural = e.requiredExtraNils == 1 ? "" : "s";
-            return format("This function was declared to accept self, but you did not pass enough arguments. Use a colon instead of a dot or "
-                          "pass %i extra nil%s to suppress this warning",
-                e.requiredExtraNils, plural);
-        }
-        else
-            return "This function must be called with self. Did you mean to use a colon instead of a dot?";
+        return "This function must be called with self. Did you mean to use a colon instead of a dot?";
     }
 
     std::string operator()(const Luau::OccursCheckFailed&) const
@@ -190,24 +235,24 @@ struct ErrorConverter
         {
             name += "<";
             bool first = true;
-            for (TypeId t : e.typeFun.typeParams)
+            for (auto param : e.typeFun.typeParams)
             {
                 if (first)
                     first = false;
                 else
                     name += ", ";
 
-                name += toString(t);
+                name += toString(param.ty);
             }
 
-            for (TypePackId t : e.typeFun.typePackParams)
+            for (auto param : e.typeFun.typePackParams)
             {
                 if (first)
                     first = false;
                 else
                     name += ", ";
 
-                name += toString(t);
+                name += toString(param.tp);
             }
 
             name += ">";
@@ -215,15 +260,15 @@ struct ErrorConverter
 
         if (e.typeFun.typeParams.size() != e.actualParameters)
             return "Generic type '" + name + "' " +
-                   wrongNumberOfArgsString(e.typeFun.typeParams.size(), e.actualParameters, "type", !e.typeFun.typePackParams.empty());
+                   wrongNumberOfArgsString(e.typeFun.typeParams.size(), std::nullopt, e.actualParameters, "type", !e.typeFun.typePackParams.empty());
 
         return "Generic type '" + name + "' " +
-               wrongNumberOfArgsString(e.typeFun.typePackParams.size(), e.actualPackParameters, "type pack", /*isVariadic*/ false);
+               wrongNumberOfArgsString(e.typeFun.typePackParams.size(), std::nullopt, e.actualPackParameters, "type pack", /*isVariadic*/ false);
     }
 
     std::string operator()(const Luau::SyntaxError& e) const
     {
-        return "Syntax error: " + e.message;
+        return e.message;
     }
 
     std::string operator()(const Luau::CodeTooComplex&) const
@@ -256,7 +301,7 @@ struct ErrorConverter
         std::string s = "Key '" + e.key + "' not found in ";
 
         TypeId t = follow(e.table);
-        if (get<ClassTypeVar>(t))
+        if (get<ClassType>(t))
             s += "class";
         else
             s += "table";
@@ -266,6 +311,11 @@ struct ErrorConverter
     }
 
     std::string operator()(const Luau::GenericError& e) const
+    {
+        return e.message;
+    }
+
+    std::string operator()(const Luau::InternalError& e) const
     {
         return e.message;
     }
@@ -410,6 +460,26 @@ struct ErrorConverter
 
         return ss + " in the type '" + toString(e.type) + "'";
     }
+
+    std::string operator()(const TypesAreUnrelated& e) const
+    {
+        return "Cannot cast '" + toString(e.left) + "' into '" + toString(e.right) + "' because the types are unrelated";
+    }
+
+    std::string operator()(const NormalizationTooComplex&) const
+    {
+        return "Code is too complex to typecheck! Consider simplifying the code around this area";
+    }
+
+    std::string operator()(const TypePackMismatch& e) const
+    {
+        return "Type pack '" + toString(e.givenTp) + "' could not be converted into '" + toString(e.wantedTp) + "'";
+    }
+
+    std::string operator()(const DynamicPropertyLookupOnClassesUnsafe& e) const
+    {
+        return "Attempting a dynamic property access on type '" + Luau::toString(e.ty) + "' is unsafe and may cause exceptions at runtime";
+    }
 };
 
 struct InvalidNameChecker
@@ -449,11 +519,35 @@ TypeMismatch::TypeMismatch(TypeId wantedType, TypeId givenType, std::string reas
 {
 }
 
-TypeMismatch::TypeMismatch(TypeId wantedType, TypeId givenType, std::string reason, TypeError error)
+TypeMismatch::TypeMismatch(TypeId wantedType, TypeId givenType, std::string reason, std::optional<TypeError> error)
     : wantedType(wantedType)
     , givenType(givenType)
     , reason(reason)
-    , error(std::make_shared<TypeError>(std::move(error)))
+    , error(error ? std::make_shared<TypeError>(std::move(*error)) : nullptr)
+{
+}
+
+TypeMismatch::TypeMismatch(TypeId wantedType, TypeId givenType, TypeMismatch::Context context)
+    : wantedType(wantedType)
+    , givenType(givenType)
+    , context(context)
+{
+}
+
+TypeMismatch::TypeMismatch(TypeId wantedType, TypeId givenType, std::string reason, TypeMismatch::Context context)
+    : wantedType(wantedType)
+    , givenType(givenType)
+    , context(context)
+    , reason(reason)
+{
+}
+
+TypeMismatch::TypeMismatch(TypeId wantedType, TypeId givenType, std::string reason, std::optional<TypeError> error, TypeMismatch::Context context)
+    : wantedType(wantedType)
+    , givenType(givenType)
+    , context(context)
+    , reason(reason)
+    , error(error ? std::make_shared<TypeError>(std::move(*error)) : nullptr)
 {
 }
 
@@ -465,7 +559,7 @@ bool TypeMismatch::operator==(const TypeMismatch& rhs) const
     if (error && !(*error == *rhs.error))
         return false;
 
-    return *wantedType == *rhs.wantedType && *givenType == *rhs.givenType && reason == rhs.reason;
+    return *wantedType == *rhs.wantedType && *givenType == *rhs.givenType && reason == rhs.reason && context == rhs.context;
 }
 
 bool UnknownSymbol::operator==(const UnknownSymbol& rhs) const
@@ -500,7 +594,7 @@ bool DuplicateTypeDefinition::operator==(const DuplicateTypeDefinition& rhs) con
 
 bool CountMismatch::operator==(const CountMismatch& rhs) const
 {
-    return expected == rhs.expected && actual == rhs.actual && context == rhs.context;
+    return expected == rhs.expected && maximum == rhs.maximum && actual == rhs.actual && context == rhs.context && function == rhs.function;
 }
 
 bool FunctionDoesNotTakeSelf::operator==(const FunctionDoesNotTakeSelf&) const
@@ -510,7 +604,7 @@ bool FunctionDoesNotTakeSelf::operator==(const FunctionDoesNotTakeSelf&) const
 
 bool FunctionRequiresSelf::operator==(const FunctionRequiresSelf& e) const
 {
-    return requiredExtraNils == e.requiredExtraNils;
+    return true;
 }
 
 bool OccursCheckFailed::operator==(const OccursCheckFailed&) const
@@ -539,13 +633,13 @@ bool IncorrectGenericParameterCount::operator==(const IncorrectGenericParameterC
 
     for (size_t i = 0; i < typeFun.typeParams.size(); ++i)
     {
-        if (typeFun.typeParams[i] != rhs.typeFun.typeParams[i])
+        if (typeFun.typeParams[i].ty != rhs.typeFun.typeParams[i].ty)
             return false;
     }
 
     for (size_t i = 0; i < typeFun.typePackParams.size(); ++i)
     {
-        if (typeFun.typePackParams[i] != rhs.typeFun.typePackParams[i])
+        if (typeFun.typePackParams[i].tp != rhs.typeFun.typePackParams[i].tp)
             return false;
     }
 
@@ -578,6 +672,11 @@ bool GenericError::operator==(const GenericError& rhs) const
     return message == rhs.message;
 }
 
+bool InternalError::operator==(const InternalError& rhs) const
+{
+    return message == rhs.message;
+}
+
 bool CannotCallNonFunction::operator==(const CannotCallNonFunction& rhs) const
 {
     return ty == rhs.ty;
@@ -600,7 +699,17 @@ bool FunctionExitsWithoutReturning::operator==(const FunctionExitsWithoutReturni
 
 int TypeError::code() const
 {
-    return 1000 + int(data.index());
+    return minCode() + int(data.index());
+}
+
+int TypeError::minCode()
+{
+    return 1000;
+}
+
+TypeErrorSummary TypeError::summary() const
+{
+    return TypeErrorSummary{location, moduleName, code()};
 }
 
 bool TypeError::operator==(const TypeError& rhs) const
@@ -658,9 +767,29 @@ bool MissingUnionProperty::operator==(const MissingUnionProperty& rhs) const
     return *type == *rhs.type && key == rhs.key;
 }
 
+bool TypesAreUnrelated::operator==(const TypesAreUnrelated& rhs) const
+{
+    return left == rhs.left && right == rhs.right;
+}
+
+bool TypePackMismatch::operator==(const TypePackMismatch& rhs) const
+{
+    return *wantedTp == *rhs.wantedTp && *givenTp == *rhs.givenTp;
+}
+
+bool DynamicPropertyLookupOnClassesUnsafe::operator==(const DynamicPropertyLookupOnClassesUnsafe& rhs) const
+{
+    return ty == rhs.ty;
+}
+
 std::string toString(const TypeError& error)
 {
-    ErrorConverter converter;
+    return toString(error, TypeErrorToStringOptions{});
+}
+
+std::string toString(const TypeError& error, TypeErrorToStringOptions options)
+{
+    ErrorConverter converter{options.fileResolver};
     return Luau::visit(converter, error.data);
 }
 
@@ -670,14 +799,14 @@ bool containsParseErrorName(const TypeError& error)
 }
 
 template<typename T>
-void copyError(T& e, TypeArena& destArena, SeenTypes& seenTypes, SeenTypePacks& seenTypePacks, CloneState cloneState)
+void copyError(T& e, TypeArena& destArena, CloneState cloneState)
 {
     auto clone = [&](auto&& ty) {
-        return ::Luau::clone(ty, destArena, seenTypes, seenTypePacks, cloneState);
+        return ::Luau::clone(ty, destArena, cloneState);
     };
 
     auto visitErrorData = [&](auto&& e) {
-        copyError(e, destArena, seenTypes, seenTypePacks, cloneState);
+        copyError(e, destArena, cloneState);
     };
 
     if constexpr (false)
@@ -748,6 +877,9 @@ void copyError(T& e, TypeArena& destArena, SeenTypes& seenTypes, SeenTypePacks& 
     else if constexpr (std::is_same_v<T, GenericError>)
     {
     }
+    else if constexpr (std::is_same_v<T, InternalError>)
+    {
+    }
     else if constexpr (std::is_same_v<T, CannotCallNonFunction>)
     {
         e.ty = clone(e.ty);
@@ -793,21 +925,34 @@ void copyError(T& e, TypeArena& destArena, SeenTypes& seenTypes, SeenTypePacks& 
         for (auto& ty : e.missing)
             ty = clone(ty);
     }
+    else if constexpr (std::is_same_v<T, TypesAreUnrelated>)
+    {
+        e.left = clone(e.left);
+        e.right = clone(e.right);
+    }
+    else if constexpr (std::is_same_v<T, NormalizationTooComplex>)
+    {
+    }
+    else if constexpr (std::is_same_v<T, TypePackMismatch>)
+    {
+        e.wantedTp = clone(e.wantedTp);
+        e.givenTp = clone(e.givenTp);
+    }
+    else if constexpr (std::is_same_v<T, DynamicPropertyLookupOnClassesUnsafe>)
+        e.ty = clone(e.ty);
     else
         static_assert(always_false_v<T>, "Non-exhaustive type switch");
 }
 
 void copyErrors(ErrorVec& errors, TypeArena& destArena)
 {
-    SeenTypes seenTypes;
-    SeenTypePacks seenTypePacks;
     CloneState cloneState;
 
     auto visitErrorData = [&](auto&& e) {
-        copyError(e, destArena, seenTypes, seenTypePacks, cloneState);
+        copyError(e, destArena, cloneState);
     };
 
-    LUAU_ASSERT(!destArena.typeVars.isFrozen());
+    LUAU_ASSERT(!destArena.types.isFrozen());
     LUAU_ASSERT(!destArena.typePacks.isFrozen());
 
     for (TypeError& error : errors)
@@ -816,7 +961,7 @@ void copyErrors(ErrorVec& errors, TypeArena& destArena)
 
 void InternalErrorReporter::ice(const std::string& message, const Location& location)
 {
-    std::runtime_error error("Internal error in " + moduleName + " at " + toString(location) + ": " + message);
+    InternalCompilerError error(message, moduleName, location);
 
     if (onInternalError)
         onInternalError(error.what());
@@ -826,12 +971,17 @@ void InternalErrorReporter::ice(const std::string& message, const Location& loca
 
 void InternalErrorReporter::ice(const std::string& message)
 {
-    std::runtime_error error("Internal error in " + moduleName + ": " + message);
+    InternalCompilerError error(message, moduleName);
 
     if (onInternalError)
         onInternalError(error.what());
 
     throw error;
+}
+
+const char* InternalCompilerError::what() const throw()
+{
+    return this->message.data();
 }
 
 } // namespace Luau

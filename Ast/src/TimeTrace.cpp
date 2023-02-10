@@ -9,6 +9,12 @@
 #include <stdlib.h>
 
 #ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <Windows.h>
 #endif
 
@@ -20,9 +26,6 @@
 #include <time.h>
 
 LUAU_FASTFLAGVARIABLE(DebugLuauTimeTracing, false)
-
-#if defined(LUAU_ENABLE_TIME_TRACE)
-
 namespace Luau
 {
 namespace TimeTrace
@@ -61,6 +64,14 @@ static double getClockTimestamp()
 #endif
 }
 
+double getClock()
+{
+    static double period = getClockPeriod();
+    static double start = getClockTimestamp();
+
+    return (getClockTimestamp() - start) * period;
+}
+
 uint32_t getClockMicroseconds()
 {
     static double period = getClockPeriod() * 1e6;
@@ -68,7 +79,15 @@ uint32_t getClockMicroseconds()
 
     return uint32_t((getClockTimestamp() - start) * period);
 }
+} // namespace TimeTrace
+} // namespace Luau
 
+#if defined(LUAU_ENABLE_TIME_TRACE)
+
+namespace Luau
+{
+namespace TimeTrace
+{
 struct GlobalContext
 {
     GlobalContext() = default;
@@ -240,10 +259,9 @@ ThreadContext& getThreadContext()
     return context;
 }
 
-std::pair<uint16_t, Luau::TimeTrace::ThreadContext&> createScopeData(const char* name, const char* category)
+uint16_t createScopeData(const char* name, const char* category)
 {
-    uint16_t token = createToken(Luau::TimeTrace::getGlobalContext(), name, category);
-    return {token, Luau::TimeTrace::getThreadContext()};
+    return createToken(Luau::TimeTrace::getGlobalContext(), name, category);
 }
 } // namespace TimeTrace
 } // namespace Luau

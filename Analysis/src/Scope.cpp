@@ -17,20 +17,49 @@ Scope::Scope(const ScopePtr& parent, int subLevel)
     , returnType(parent->returnType)
     , level(parent->level.incr())
 {
+    level = level.incr();
     level.subLevel = subLevel;
 }
 
-std::optional<TypeId> Scope::lookup(const Symbol& name)
+void Scope::addBuiltinTypeBinding(const Name& name, const TypeFun& tyFun)
 {
-    Scope* scope = this;
+    exportedTypeBindings[name] = tyFun;
+    builtinTypeNames.insert(name);
+}
 
-    while (scope)
+std::optional<TypeId> Scope::lookup(Symbol sym) const
+{
+    auto r = const_cast<Scope*>(this)->lookupEx(sym);
+    if (r)
+        return r->first;
+    else
+        return std::nullopt;
+}
+
+std::optional<std::pair<TypeId, Scope*>> Scope::lookupEx(Symbol sym)
+{
+    Scope* s = this;
+
+    while (true)
     {
-        auto it = scope->bindings.find(name);
-        if (it != scope->bindings.end())
-            return it->second.typeId;
+        auto it = s->bindings.find(sym);
+        if (it != s->bindings.end())
+            return std::pair{it->second.typeId, s};
 
-        scope = scope->parent.get();
+        if (s->parent)
+            s = s->parent.get();
+        else
+            return std::nullopt;
+    }
+}
+
+// TODO: We might kill Scope::lookup(Symbol) once data flow is fully fleshed out with type states and control flow analysis.
+std::optional<TypeId> Scope::lookup(DefId def) const
+{
+    for (const Scope* current = this; current; current = current->parent.get())
+    {
+        if (auto ty = current->dcrRefinements.find(def))
+            return *ty;
     }
 
     return std::nullopt;
@@ -97,9 +126,9 @@ std::optional<TypePackId> Scope::lookupPack(const Name& name)
     }
 }
 
-std::optional<Binding> Scope::linearSearchForBinding(const std::string& name, bool traverseScopeChain)
+std::optional<Binding> Scope::linearSearchForBinding(const std::string& name, bool traverseScopeChain) const
 {
-    Scope* scope = this;
+    const Scope* scope = this;
 
     while (scope)
     {
@@ -118,6 +147,24 @@ std::optional<Binding> Scope::linearSearchForBinding(const std::string& name, bo
     }
 
     return std::nullopt;
+}
+
+bool subsumesStrict(Scope* left, Scope* right)
+{
+    while (right)
+    {
+        if (right->parent.get() == left)
+            return true;
+
+        right = right->parent.get();
+    }
+
+    return false;
+}
+
+bool subsumes(Scope* left, Scope* right)
+{
+    return left == right || subsumesStrict(left, right);
 }
 
 } // namespace Luau

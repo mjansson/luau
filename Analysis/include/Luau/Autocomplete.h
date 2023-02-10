@@ -2,7 +2,7 @@
 #pragma once
 
 #include "Luau/Location.h"
-#include "Luau/TypeVar.h"
+#include "Luau/Type.h"
 
 #include <unordered_map>
 #include <string>
@@ -18,6 +18,17 @@ struct Module;
 struct TypeChecker;
 
 using ModulePtr = std::shared_ptr<Module>;
+
+enum class AutocompleteContext
+{
+    Unknown,
+    Expression,
+    Statement,
+    Property,
+    Type,
+    Keyword,
+    String,
+};
 
 enum class AutocompleteEntryKind
 {
@@ -54,7 +65,7 @@ struct AutocompleteEntry
     // Set if this suggestion matches the type expected in the context
     TypeCorrectKind typeCorrect = TypeCorrectKind::None;
 
-    std::optional<const ClassTypeVar*> containingClass = std::nullopt;
+    std::optional<const ClassType*> containingClass = std::nullopt;
     std::optional<const Property*> prop = std::nullopt;
     std::optional<std::string> documentationSymbol = std::nullopt;
     Tags tags;
@@ -66,26 +77,21 @@ struct AutocompleteResult
 {
     AutocompleteEntryMap entryMap;
     std::vector<AstNode*> ancestry;
+    AutocompleteContext context = AutocompleteContext::Unknown;
 
     AutocompleteResult() = default;
-    AutocompleteResult(AutocompleteEntryMap entryMap, std::vector<AstNode*> ancestry)
+    AutocompleteResult(AutocompleteEntryMap entryMap, std::vector<AstNode*> ancestry, AutocompleteContext context)
         : entryMap(std::move(entryMap))
         , ancestry(std::move(ancestry))
+        , context(context)
     {
     }
 };
 
 using ModuleName = std::string;
-using StringCompletionCallback = std::function<std::optional<AutocompleteEntryMap>(std::string tag, std::optional<const ClassTypeVar*> ctx)>;
-
-struct OwningAutocompleteResult
-{
-    AutocompleteResult result;
-    ModulePtr module;
-    std::unique_ptr<SourceModule> sourceModule;
-};
+using StringCompletionCallback =
+    std::function<std::optional<AutocompleteEntryMap>(std::string tag, std::optional<const ClassType*> ctx, std::optional<std::string> contents)>;
 
 AutocompleteResult autocomplete(Frontend& frontend, const ModuleName& moduleName, Position position, StringCompletionCallback callback);
-OwningAutocompleteResult autocompleteSource(Frontend& frontend, std::string_view source, Position position, StringCompletionCallback callback);
 
 } // namespace Luau

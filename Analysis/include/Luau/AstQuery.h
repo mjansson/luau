@@ -13,8 +13,8 @@ struct Binding;
 struct SourceModule;
 struct Module;
 
-struct TypeVar;
-using TypeId = const TypeVar*;
+struct Type;
+using TypeId = const Type*;
 
 using ScopePtr = std::shared_ptr<struct Scope>;
 
@@ -42,13 +42,29 @@ struct ExprOrLocal
     {
         return expr ? expr->location : (local ? local->location : std::optional<Location>{});
     }
+    std::optional<AstName> getName()
+    {
+        if (expr)
+        {
+            if (AstName name = getIdentifier(expr); name.value)
+            {
+                return name;
+            }
+        }
+        else if (local)
+        {
+            return local->name;
+        }
+        return std::nullopt;
+    }
 
 private:
     AstExpr* expr = nullptr;
     AstLocal* local = nullptr;
 };
 
-std::vector<AstNode*> findAstAncestryOfPosition(const SourceModule& source, Position pos);
+std::vector<AstNode*> findAncestryAtPositionForAutocomplete(const SourceModule& source, Position pos);
+std::vector<AstNode*> findAstAncestryOfPosition(const SourceModule& source, Position pos, bool includeTypes = false);
 AstNode* findNodeAtPosition(const SourceModule& source, Position pos);
 AstExpr* findExprAtPosition(const SourceModule& source, Position pos);
 ScopePtr findScopeAtPosition(const Module& module, Position pos);

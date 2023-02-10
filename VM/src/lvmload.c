@@ -128,9 +128,24 @@ static void runResolveImport(lua_State* L, void* ud)
 
 static void resolveImportSafe(lua_State* L, Table* env, TValue* k, uint32_t id)
 {
-    (void)sizeof(env);
+    struct ResolveImport
+    {
+        TValue* k;
+        uint32_t id;
+
+        static void run(lua_State* L, void* ud)
+        {
+            ResolveImport* self = static_cast<ResolveImport*>(ud);
+
+            // note: we call getimport with nil propagation which means that accesses to table chains like A.B.C will resolve in nil
+            // this is technically not necessary but it reduces the number of exceptions when loading scripts that rely on getfenv/setfenv for global
+            // injection
+            luaV_getimport(L, L->gt, self->k, self->id, /* propagatenil= */ true);
+        }
+    };
+
     ResolveImport ri = {k, id};
-    if (hvalue(gt(L))->safeenv)
+    if (L->gt->safeenv)
     {
         // luaD_pcall will make sure that if any C/Lua calls during import resolution fail, the thread state is restored back
         int oldTop = lua_gettop(L);
@@ -157,15 +172,19 @@ int luau_load(lua_State* L, const char* chunkname, const char* data, size_t size
     uint8_t version = read_uint8_t(data, size, &offset);
 
     // 0 means the rest of the bytecode is the error message
-    if (version == 0 || version != LBC_VERSION)
+    if (version == 0)
     {
-        char chunkid[LUA_IDSIZE];
-        luaO_chunkid(chunkid, chunkname, LUA_IDSIZE);
+        char chunkbuf[LUA_IDSIZE];
+        const char* chunkid = luaO_chunkid(chunkbuf, sizeof(chunkbuf), chunkname, strlen(chunkname));
+        lua_pushfstring(L, "%s%.*s", chunkid, int(size - offset), data + offset);
+        return 1;
+    }
 
-        if (version == 0)
-            lua_pushfstring(L, "%s%.*s", chunkid, (int)(size - offset), data + offset);
-        else
-            lua_pushfstring(L, "%s: bytecode version mismatch", chunkid);
+    if (version < LBC_VERSION_MIN || version > LBC_VERSION_MAX)
+    {
+        char chunkbuf[LUA_IDSIZE];
+        const char* chunkid = luaO_chunkid(chunkbuf, sizeof(chunkbuf), chunkname, strlen(chunkname));
+        lua_pushfstring(L, "%s: bytecode version mismatch (expected [%d..%d], got %d)", chunkid, LBC_VERSION_MIN, LBC_VERSION_MAX, version);
         return 1;
     }
 
@@ -175,7 +194,7 @@ int luau_load(lua_State* L, const char* chunkname, const char* data, size_t size
     L->global->GCthreshold = SIZE_MAX;
 
     // env is 0 for current environment and a stack index otherwise
-    Table* envt = (env == 0) ? hvalue(gt(L)) : hvalue(luaA_toobject(L, env));
+    Table* envt = (env == 0) ? L->gt : hvalue(luaA_toobject(L, env));
 
     TString* source = luaS_new(L, chunkname);
 
@@ -199,6 +218,7 @@ int luau_load(lua_State* L, const char* chunkname, const char* data, size_t size
     {
         Proto* p = luaF_newproto(L);
         p->source = source;
+        p->bytecodeid = int(i);
 
         p->maxstacksize = read_uint8_t(data, size, &offset);
         p->numparams = read_uint8_t(data, size, &offset);
@@ -247,7 +267,7 @@ int luau_load(lua_State* L, const char* chunkname, const char* data, size_t size
             case LBC_CONSTANT_STRING:
             {
                 TString* v = readString(strings, data, size, &offset);
-                setsvalue2n(L, &p->k[j], v);
+                setsvalue(L, &p->k[j], v);
                 break;
             }
 
@@ -296,6 +316,7 @@ int luau_load(lua_State* L, const char* chunkname, const char* data, size_t size
             p->p[j] = protos[fid];
         }
 
+        p->linedefined = readVarInt(data, size, &offset);
         p->debugname = readString(strings, data, size, &offset);
 
         uint8_t lineinfo = read_uint8_t(data, size, &offset);
@@ -318,11 +339,11 @@ int luau_load(lua_State* L, const char* chunkname, const char* data, size_t size
                 p->lineinfo[j] = lastoffset;
             }
 
-            int lastLine = 0;
+            int lastline = 0;
             for (int j = 0; j < intervals; ++j)
             {
                 lastLine += read_int32_t(data, size, &offset);
-                p->abslineinfo[j] = lastLine;
+                p->abslineinfo[j] = lastline;
             }
         }
 
@@ -357,7 +378,7 @@ int luau_load(lua_State* L, const char* chunkname, const char* data, size_t size
     uint32_t mainid = readVarInt(data, size, &offset);
     Proto* main = protos[mainid];
 
-    luaC_checkthreadsleep(L);
+    luaC_threadbarrier(L);
 
     Closure* cl = luaF_newLclosure(L, 0, envt, main);
     setclvalue(L, L->top, cl);

@@ -2,16 +2,16 @@
 // This code is based on Lua 5.x implementation licensed under MIT License; see lua_LICENSE.txt for details
 #include "lgc.h"
 
+#include "lfunc.h"
+#include "lmem.h"
 #include "lobject.h"
 #include "lstate.h"
-#include "ltable.h"
-#include "lfunc.h"
 #include "lstring.h"
+#include "ltable.h"
+#include "ludata.h"
 
 #include <string.h>
 #include <stdio.h>
-
-LUAU_FASTFLAG(LuauArrayBoundary)
 
 static void validateobjref(global_State* g, GCObject* f, GCObject* t)
 {
@@ -19,7 +19,7 @@ static void validateobjref(global_State* g, GCObject* f, GCObject* t)
 
     if (keepinvariant(g))
     {
-        /* basic incremental invariant: black can't point to white */
+        // basic incremental invariant: black can't point to white
         LUAU_ASSERT(!(isblack(f) && iswhite(t)));
     }
 }
@@ -37,10 +37,7 @@ static void validatetable(global_State* g, Table* h)
 {
     int sizenode = 1 << h->lsizenode;
 
-    if (FFlag::LuauArrayBoundary)
-        LUAU_ASSERT(h->lastfree <= sizenode);
-    else
-        LUAU_ASSERT(h->lastfree >= 0 && h->lastfree <= sizenode);
+    LUAU_ASSERT(h->lastfree <= sizenode);
 
     if (h->metatable)
         validateobjref(g, obj2gco(h), obj2gco(h->metatable));
@@ -89,7 +86,7 @@ static void validateclosure(global_State* g, Closure* cl)
 
 static void validatestack(global_State* g, lua_State* l)
 {
-    validateref(g, obj2gco(l), gt(l));
+    validateobjref(g, obj2gco(l), obj2gco(l->gt));
 
     for (CallInfo* ci = l->base_ci; ci <= l->ci; ++ci)
     {
@@ -105,10 +102,12 @@ static void validatestack(global_State* g, lua_State* l)
     if (l->namecall)
         validateobjref(g, obj2gco(l), obj2gco(l->namecall));
 
-    for (GCObject* uv = l->openupval; uv; uv = uv->gch.next)
+    for (UpVal* uv = l->openupval; uv; uv = uv->u.open.threadnext)
     {
-        LUAU_ASSERT(uv->gch.tt == LUA_TUPVAL);
-        LUAU_ASSERT(gco2uv(uv)->v != &gco2uv(uv)->u.value);
+        LUAU_ASSERT(uv->tt == LUA_TUPVAL);
+        LUAU_ASSERT(upisopen(uv));
+        LUAU_ASSERT(uv->u.open.next->u.open.prev == uv && uv->u.open.prev->u.open.next == uv);
+        LUAU_ASSERT(!isblack(obj2gco(uv))); // open upvalues are never black
     }
 }
 
@@ -138,10 +137,10 @@ static void validateproto(global_State* g, Proto* f)
 
 static void validateobj(global_State* g, GCObject* o)
 {
-    /* dead objects can only occur during sweep */
+    // dead objects can only occur during sweep
     if (isdead(g, o))
     {
-        LUAU_ASSERT(g->gcstate == GCSsweepstring || g->gcstate == GCSsweep);
+        LUAU_ASSERT(g->gcstate == GCSsweep);
         return;
     }
 
@@ -180,16 +179,6 @@ static void validateobj(global_State* g, GCObject* o)
     }
 }
 
-static void validatelist(global_State* g, GCObject* o)
-{
-    while (o)
-    {
-        validateobj(g, o);
-
-        o = o->gch.next;
-    }
-}
-
 static void validategraylist(global_State* g, GCObject* o)
 {
     if (!keepinvariant(g))
@@ -220,6 +209,15 @@ static void validategraylist(global_State* g, GCObject* o)
     }
 }
 
+static bool validategco(void* context, lua_Page* page, GCObject* gco)
+{
+    lua_State* L = (lua_State*)context;
+    global_State* g = L->global;
+
+    validateobj(g, gco);
+    return false;
+}
+
 void luaC_validate(lua_State* L)
 {
     global_State* g = L->global;
@@ -235,17 +233,16 @@ void luaC_validate(lua_State* L)
     validategraylist(g, g->gray);
     validategraylist(g, g->grayagain);
 
-    for (int i = 0; i < g->strt.size; ++i)
-        validatelist(g, g->strt.hash[i]);
+    validategco(L, NULL, obj2gco(g->mainthread));
 
-    validatelist(g, g->rootgc);
-    validatelist(g, g->strbufgc);
+    luaM_visitgco(L, L, validategco);
 
-    for (UpVal* uv = g->uvhead.u.l.next; uv != &g->uvhead; uv = uv->u.l.next)
+    for (UpVal* uv = g->uvhead.u.open.next; uv != &g->uvhead; uv = uv->u.open.next)
     {
         LUAU_ASSERT(uv->tt == LUA_TUPVAL);
-        LUAU_ASSERT(uv->v != &uv->u.value);
-        LUAU_ASSERT(uv->u.l.next->u.l.prev == uv && uv->u.l.prev->u.l.next == uv);
+        LUAU_ASSERT(upisopen(uv));
+        LUAU_ASSERT(uv->u.open.next->u.open.prev == uv && uv->u.open.prev->u.open.next == uv);
+        LUAU_ASSERT(!isblack(obj2gco(uv))); // open upvalues are never black
     }
 }
 
@@ -348,8 +345,12 @@ static void dumpclosure(FILE* f, Closure* cl)
 
     fprintf(f, ",\"env\":");
     dumpref(f, obj2gco(cl->env));
+
     if (cl->isC)
     {
+        if (cl->c.debugname)
+            fprintf(f, ",\"name\":\"%s\"", cl->c.debugname + 0);
+
         if (cl->nupvalues)
         {
             fprintf(f, ",\"upvalues\":[");
@@ -359,6 +360,9 @@ static void dumpclosure(FILE* f, Closure* cl)
     }
     else
     {
+        if (cl->l.p->debugname)
+            fprintf(f, ",\"name\":\"%s\"", getstr(cl->l.p->debugname));
+
         fprintf(f, ",\"proto\":");
         dumpref(f, obj2gco(cl->l.p));
         if (cl->nupvalues)
@@ -389,11 +393,8 @@ static void dumpthread(FILE* f, lua_State* th)
 
     fprintf(f, "{\"type\":\"thread\",\"cat\":%d,\"size\":%d", th->memcat, int(size));
 
-    if (iscollectable(&th->l_gt))
-    {
-        fprintf(f, ",\"env\":");
-        dumpref(f, gcvalue(&th->l_gt));
-    }
+    fprintf(f, ",\"env\":");
+    dumpref(f, obj2gco(th->gt));
 
     Closure* tcl = 0;
     for (CallInfo* ci = th->base_ci; ci <= th->ci; ++ci)
@@ -411,13 +412,62 @@ static void dumpthread(FILE* f, lua_State* th)
 
         fprintf(f, ",\"source\":\"");
         dumpstringdata(f, p->source->data, p->source->len);
-        fprintf(f, "\",\"line\":%d", p->abslineinfo ? p->abslineinfo[0] : 0);
+        fprintf(f, "\",\"line\":%d", p->linedefined);
     }
 
     if (th->top > th->stack)
     {
         fprintf(f, ",\"stack\":[");
         dumprefs(f, th->stack, th->top - th->stack);
+        fprintf(f, "]");
+
+        CallInfo* ci = th->base_ci;
+        bool first = true;
+
+        fprintf(f, ",\"stacknames\":[");
+        for (StkId v = th->stack; v < th->top; ++v)
+        {
+            if (!iscollectable(v))
+                continue;
+
+            while (ci < th->ci && v >= (ci + 1)->func)
+                ci++;
+
+            if (!first)
+                fputc(',', f);
+            first = false;
+
+            if (v == ci->func)
+            {
+                Closure* cl = ci_func(ci);
+
+                if (cl->isC)
+                {
+                    fprintf(f, "\"frame:%s\"", cl->c.debugname ? cl->c.debugname : "[C]");
+                }
+                else
+                {
+                    Proto* p = cl->l.p;
+                    fprintf(f, "\"frame:");
+                    if (p->source)
+                        dumpstringdata(f, p->source->data, p->source->len);
+                    fprintf(f, ":%d:%s\"", p->linedefined, p->debugname ? getstr(p->debugname) : "");
+                }
+            }
+            else if (isLua(ci))
+            {
+                Proto* p = ci_func(ci)->l.p;
+                int pc = pcRel(ci->savedpc, p);
+                const LocVar* var = luaF_findlocal(p, int(v - ci->base), pc);
+
+                if (var && var->varname)
+                    fprintf(f, "\"%s\"", getstr(var->varname));
+                else
+                    fprintf(f, "null");
+            }
+            else
+                fprintf(f, "null");
+        }
         fprintf(f, "]");
     }
     fprintf(f, "}");
@@ -461,13 +511,14 @@ static void dumpproto(FILE* f, Proto* p)
 
 static void dumpupval(FILE* f, UpVal* uv)
 {
-    fprintf(f, "{\"type\":\"upvalue\",\"cat\":%d,\"size\":%d", uv->memcat, int(sizeof(UpVal)));
+    fprintf(f, "{\"type\":\"upvalue\",\"cat\":%d,\"size\":%d,\"open\":%s", uv->memcat, int(sizeof(UpVal)), upisopen(uv) ? "true" : "false");
 
     if (iscollectable(uv->v))
     {
         fprintf(f, ",\"object\":");
         dumpref(f, gcvalue(uv->v));
     }
+
     fprintf(f, "}");
 }
 
@@ -501,22 +552,17 @@ static void dumpobj(FILE* f, GCObject* o)
     }
 }
 
-static void dumplist(FILE* f, GCObject* o)
+static bool dumpgco(void* context, lua_Page* page, GCObject* gco)
 {
-    while (o)
-    {
-        dumpref(f, o);
-        fputc(':', f);
-        dumpobj(f, o);
-        fputc(',', f);
-        fputc('\n', f);
+    FILE* f = (FILE*)context;
 
-        // thread has additional list containing collectable objects that are not present in rootgc
-        if (o->gch.tt == LUA_TTHREAD)
-            dumplist(f, gco2th(o)->openupval);
+    dumpref(f, gco);
+    fputc(':', f);
+    dumpobj(f, gco);
+    fputc(',', f);
+    fputc('\n', f);
 
-        o = o->gch.next;
-    }
+    return false;
 }
 
 void luaC_dump(lua_State* L, void* file, const char* (*categoryName)(lua_State* L, uint8_t memcat))
@@ -525,10 +571,10 @@ void luaC_dump(lua_State* L, void* file, const char* (*categoryName)(lua_State* 
     FILE* f = static_cast<FILE*>(file);
 
     fprintf(f, "{\"objects\":{\n");
-    dumplist(f, g->rootgc);
-    dumplist(f, g->strbufgc);
-    for (int i = 0; i < g->strt.size; ++i)
-        dumplist(f, g->strt.hash[i]);
+
+    dumpgco(f, NULL, obj2gco(g->mainthread));
+
+    luaM_visitgco(L, f, dumpgco);
 
     fprintf(f, "\"0\":{\"type\":\"userdata\",\"cat\":0,\"size\":0}\n"); // to avoid issues with trailing ,
     fprintf(f, "},\"roots\":{\n");

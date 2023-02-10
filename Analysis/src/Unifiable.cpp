@@ -6,18 +6,32 @@ namespace Luau
 namespace Unifiable
 {
 
+static int nextIndex = 0;
+
 Free::Free(TypeLevel level)
     : index(++nextIndex)
     , level(level)
 {
 }
 
-int Free::nextIndex = 0;
+Free::Free(Scope* scope)
+    : index(++nextIndex)
+    , scope(scope)
+{
+}
+
+Free::Free(Scope* scope, TypeLevel level)
+    : index(++nextIndex)
+    , level(level)
+    , scope(scope)
+{
+}
+
+int Free::DEPRECATED_nextIndex = 0;
 
 Generic::Generic()
     : index(++nextIndex)
     , name("g" + std::to_string(index))
-    , explicitName(false)
 {
 }
 
@@ -25,7 +39,6 @@ Generic::Generic(TypeLevel level)
     : index(++nextIndex)
     , level(level)
     , name("g" + std::to_string(index))
-    , explicitName(false)
 {
 }
 
@@ -33,6 +46,12 @@ Generic::Generic(const Name& name)
     : index(++nextIndex)
     , name(name)
     , explicitName(true)
+{
+}
+
+Generic::Generic(Scope* scope)
+    : index(++nextIndex)
+    , scope(scope)
 {
 }
 
@@ -44,7 +63,15 @@ Generic::Generic(TypeLevel level, const Name& name)
 {
 }
 
-int Generic::nextIndex = 0;
+Generic::Generic(Scope* scope, const Name& name)
+    : index(++nextIndex)
+    , scope(scope)
+    , name(name)
+    , explicitName(true)
+{
+}
+
+int Generic::DEPRECATED_nextIndex = 0;
 
 Error::Error()
     : index(++nextIndex)

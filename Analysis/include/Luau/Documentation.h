@@ -1,3 +1,4 @@
+// This file is part of the Luau programming language and is licensed under MIT License; see LICENSE.txt for details
 #pragma once
 
 #include "Luau/DenseHash.h"
@@ -21,6 +22,7 @@ struct BasicDocumentation
 {
     std::string documentation;
     std::string learnMoreLink;
+    std::string codeSample;
 };
 
 struct FunctionParameterDocumentation
@@ -37,6 +39,7 @@ struct FunctionDocumentation
     std::vector<FunctionParameterDocumentation> parameters;
     std::vector<DocumentationSymbol> returns;
     std::string learnMoreLink;
+    std::string codeSample;
 };
 
 struct OverloadedFunctionDocumentation
@@ -52,6 +55,7 @@ struct TableDocumentation
     std::string documentation;
     Luau::DenseHashMap<std::string, DocumentationSymbol> keys;
     std::string learnMoreLink;
+    std::string codeSample;
 };
 
 using DocumentationDatabase = Luau::DenseHashMap<DocumentationSymbol, Documentation>;

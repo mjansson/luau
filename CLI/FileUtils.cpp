@@ -4,8 +4,13 @@
 #include "Luau/Common.h"
 
 #ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <Windows.h>
 #else
 #include <dirent.h>
 #include <fcntl.h>
@@ -70,6 +75,21 @@ std::optional<std::string> readFile(const std::string& name)
     // Skip first line if it's a shebang
     if (length > 2 && result[0] == '#' && result[1] == '!')
         result.erase(0, result.find('\n'));
+
+    return result;
+}
+
+std::optional<std::string> readStdin()
+{
+    std::string result;
+    char buffer[4096] = {};
+
+    while (fgets(buffer, sizeof(buffer), stdin) != nullptr)
+        result.append(buffer);
+
+    // If eof was not reached for stdin, then a read error occurred
+    if (!feof(stdin))
+        return std::nullopt;
 
     return result;
 }
@@ -190,7 +210,10 @@ bool traverseDirectory(const std::string& path, const std::function<void(const s
 bool isDirectory(const std::string& path)
 {
 #ifdef _WIN32
-    return (GetFileAttributesW(fromUtf8(path).c_str()) & FILE_ATTRIBUTE_DIRECTORY) != 0;
+    DWORD fileAttributes = GetFileAttributesW(fromUtf8(path).c_str());
+    if (fileAttributes == INVALID_FILE_ATTRIBUTES)
+        return false;
+    return (fileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
 #else
     struct stat st = {};
     lstat(path.c_str(), &st);
@@ -217,7 +240,7 @@ std::optional<std::string> getParentPath(const std::string& path)
         return std::nullopt;
 #endif
 
-    std::string::size_type slash = path.find_last_of("\\/", path.size() - 1);
+    size_t slash = path.find_last_of("\\/", path.size() - 1);
 
     if (slash == 0)
         return "/";
@@ -230,7 +253,7 @@ std::optional<std::string> getParentPath(const std::string& path)
 
 static std::string getExtension(const std::string& path)
 {
-    std::string::size_type dot = path.find_last_of(".\\/");
+    size_t dot = path.find_last_of(".\\/");
 
     if (dot == std::string::npos || path[dot] != '.')
         return "";
@@ -244,7 +267,9 @@ std::vector<std::string> getSourceFiles(int argc, char** argv)
 
     for (int i = 1; i < argc; ++i)
     {
-        if (argv[i][0] == '-')
+        // Treat '-' as a special file whose source is read from stdin
+        // All other arguments that start with '-' are skipped
+        if (argv[i][0] == '-' && argv[i][1] != '\0')
             continue;
 
         if (isDirectory(argv[i]))

@@ -3,7 +3,6 @@
 #pragma once
 
 #include <math.h>
-#include <stdio.h>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -49,7 +48,7 @@ LUAU_FASTMATH_END
 
 #define luai_num2int(i, d) ((i) = (int)(d))
 
-/* On MSVC in 32-bit, double to unsigned cast compiles into a call to __dtoui3, so we invoke x87->int64 conversion path manually */
+// On MSVC in 32-bit, double to unsigned cast compiles into a call to __dtoui3, so we invoke x87->int64 conversion path manually
 #if defined(_MSC_VER) && defined(_M_IX86)
 #define luai_num2unsigned(i, n) \
     { \
@@ -62,7 +61,10 @@ LUAU_FASTMATH_END
 #define luai_num2unsigned(i, n) ((i) = (unsigned)(long long)(n))
 #endif
 
-#define luai_num2str(s, n) snprintf((s), sizeof(s), LUA_NUMBER_FMT, (n))
+#define LUAI_MAXNUM2STR 48
+
+LUAI_FUNC char* luai_num2str(char* buf, double n);
+
 #define luai_str2num(s, p) strtod((s), (p))
 
 #ifdef __clang__

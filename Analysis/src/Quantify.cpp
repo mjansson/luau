@@ -2,63 +2,84 @@
 
 #include "Luau/Quantify.h"
 
-#include "Luau/VisitTypeVar.h"
+#include "Luau/Scope.h"
+#include "Luau/Substitution.h"
+#include "Luau/TxnLog.h"
+#include "Luau/Type.h"
+#include "Luau/VisitType.h"
 
-LUAU_FASTFLAGVARIABLE(LuauQuantifyVisitOnce, false)
+LUAU_FASTFLAG(DebugLuauSharedSelf)
+LUAU_FASTFLAG(DebugLuauDeferredConstraintResolution);
+LUAU_FASTFLAG(LuauClassTypeVarsInSubstitution)
 
 namespace Luau
 {
 
-struct Quantifier
+struct Quantifier final : TypeOnceVisitor
 {
-    ModulePtr module;
     TypeLevel level;
     std::vector<TypeId> generics;
     std::vector<TypePackId> genericPacks;
+    Scope* scope = nullptr;
+    bool seenGenericType = false;
+    bool seenMutableType = false;
 
-    Quantifier(ModulePtr module, TypeLevel level)
-        : module(module)
-        , level(level)
+    explicit Quantifier(TypeLevel level)
+        : level(level)
     {
+        LUAU_ASSERT(!FFlag::DebugLuauDeferredConstraintResolution);
     }
 
-    void cycle(TypeId) {}
-    void cycle(TypePackId) {}
-
-    bool operator()(TypeId ty, const FreeTypeVar& ftv)
+    /// @return true if outer encloses inner
+    bool subsumes(Scope* outer, Scope* inner)
     {
+        while (inner)
+        {
+            if (inner == outer)
+                return true;
+            inner = inner->parent.get();
+        }
+
+        return false;
+    }
+
+    bool visit(TypeId ty, const FreeType& ftv) override
+    {
+        seenMutableType = true;
+
         if (!level.subsumes(ftv.level))
             return false;
 
-        *asMutable(ty) = GenericTypeVar{level};
+        *asMutable(ty) = GenericType{level};
+
         generics.push_back(ty);
 
         return false;
     }
 
-    template<typename T>
-    bool operator()(TypeId ty, const T& t)
+    bool visit(TypeId ty, const TableType&) override
     {
-        return true;
-    }
+        LUAU_ASSERT(getMutable<TableType>(ty));
+        TableType& ttv = *getMutable<TableType>(ty);
 
-    template<typename T>
-    bool operator()(TypePackId, const T&)
-    {
-        return true;
-    }
-
-    bool operator()(TypeId ty, const TableTypeVar&)
-    {
-        TableTypeVar& ttv = *getMutable<TableTypeVar>(ty);
-
-        if (ttv.state == TableState::Sealed || ttv.state == TableState::Generic)
-            return false;
-        if (!level.subsumes(ttv.level))
-            return false;
+        if (ttv.state == TableState::Generic)
+            seenGenericType = true;
 
         if (ttv.state == TableState::Free)
+            seenMutableType = true;
+
+        if (!level.subsumes(ttv.level))
+        {
+            if (ttv.state == TableState::Unsealed)
+                seenMutableType = true;
+            return false;
+        }
+
+        if (ttv.state == TableState::Free)
+        {
             ttv.state = TableState::Generic;
+            seenGenericType = true;
+        }
         else if (ttv.state == TableState::Unsealed)
             ttv.state = TableState::Sealed;
 
@@ -67,8 +88,10 @@ struct Quantifier
         return true;
     }
 
-    bool operator()(TypePackId tp, const FreeTypePack& ftp)
+    bool visit(TypePackId tp, const FreeTypePack& ftp) override
     {
+        seenMutableType = true;
+
         if (!level.subsumes(ftp.level))
             return false;
 
@@ -78,24 +101,172 @@ struct Quantifier
     }
 };
 
-void quantify(ModulePtr module, TypeId ty, TypeLevel level)
+void quantify(TypeId ty, TypeLevel level)
 {
-    Quantifier q{std::move(module), level};
-
-    if (FFlag::LuauQuantifyVisitOnce)
+    if (FFlag::DebugLuauSharedSelf)
     {
-        DenseHashSet<void*> seen{nullptr};
-        visitTypeVarOnce(ty, q, seen);
+        ty = follow(ty);
+
+        if (auto ttv = getTableType(ty); ttv && ttv->selfTy)
+        {
+            Quantifier selfQ{level};
+            selfQ.traverse(*ttv->selfTy);
+
+            Quantifier q{level};
+            q.traverse(ty);
+
+            for (const auto& [_, prop] : ttv->props)
+            {
+                auto ftv = getMutable<FunctionType>(follow(prop.type));
+                if (!ftv || !ftv->hasSelf)
+                    continue;
+
+                if (Luau::first(ftv->argTypes) == ttv->selfTy)
+                {
+                    ftv->generics.insert(ftv->generics.end(), selfQ.generics.begin(), selfQ.generics.end());
+                    ftv->genericPacks.insert(ftv->genericPacks.end(), selfQ.genericPacks.begin(), selfQ.genericPacks.end());
+                }
+            }
+        }
+        else if (auto ftv = getMutable<FunctionType>(ty))
+        {
+            Quantifier q{level};
+            q.traverse(ty);
+
+            ftv->generics.insert(ftv->generics.end(), q.generics.begin(), q.generics.end());
+            ftv->genericPacks.insert(ftv->genericPacks.end(), q.genericPacks.begin(), q.genericPacks.end());
+
+            if (ftv->generics.empty() && ftv->genericPacks.empty() && !q.seenMutableType && !q.seenGenericType)
+                ftv->hasNoGenerics = true;
+        }
     }
     else
     {
-        visitTypeVar(ty, q);
+        Quantifier q{level};
+        q.traverse(ty);
+
+        FunctionType* ftv = getMutable<FunctionType>(ty);
+        LUAU_ASSERT(ftv);
+        ftv->generics.insert(ftv->generics.end(), q.generics.begin(), q.generics.end());
+        ftv->genericPacks.insert(ftv->genericPacks.end(), q.genericPacks.begin(), q.genericPacks.end());
+    }
+}
+
+struct PureQuantifier : Substitution
+{
+    Scope* scope;
+    std::vector<TypeId> insertedGenerics;
+    std::vector<TypePackId> insertedGenericPacks;
+    bool seenMutableType = false;
+    bool seenGenericType = false;
+
+    PureQuantifier(TypeArena* arena, Scope* scope)
+        : Substitution(TxnLog::empty(), arena)
+        , scope(scope)
+    {
     }
 
-    FunctionTypeVar* ftv = getMutable<FunctionTypeVar>(ty);
+    bool isDirty(TypeId ty) override
+    {
+        LUAU_ASSERT(ty == follow(ty));
+
+        if (auto ftv = get<FreeType>(ty))
+        {
+            bool result = subsumes(scope, ftv->scope);
+            seenMutableType |= result;
+            return result;
+        }
+        else if (auto ttv = get<TableType>(ty))
+        {
+            if (ttv->state == TableState::Free)
+                seenMutableType = true;
+            else if (ttv->state == TableState::Generic)
+                seenGenericType = true;
+
+            return ttv->state == TableState::Unsealed || (ttv->state == TableState::Free && subsumes(scope, ttv->scope));
+        }
+
+        return false;
+    }
+
+    bool isDirty(TypePackId tp) override
+    {
+        if (auto ftp = get<FreeTypePack>(tp))
+        {
+            return subsumes(scope, ftp->scope);
+        }
+
+        return false;
+    }
+
+    TypeId clean(TypeId ty) override
+    {
+        if (auto ftv = get<FreeType>(ty))
+        {
+            TypeId result = arena->addType(GenericType{scope});
+            insertedGenerics.push_back(result);
+            return result;
+        }
+        else if (auto ttv = get<TableType>(ty))
+        {
+            TypeId result = arena->addType(TableType{});
+            TableType* resultTable = getMutable<TableType>(result);
+            LUAU_ASSERT(resultTable);
+
+            *resultTable = *ttv;
+            resultTable->level = TypeLevel{};
+            resultTable->scope = scope;
+
+            if (ttv->state == TableState::Free)
+                resultTable->state = TableState::Generic;
+            else if (ttv->state == TableState::Unsealed)
+                resultTable->state = TableState::Sealed;
+
+            return result;
+        }
+
+        return ty;
+    }
+
+    TypePackId clean(TypePackId tp) override
+    {
+        if (auto ftp = get<FreeTypePack>(tp))
+        {
+            TypePackId result = arena->addTypePack(TypePackVar{GenericTypePack{}});
+            insertedGenericPacks.push_back(result);
+            return result;
+        }
+
+        return tp;
+    }
+
+    bool ignoreChildren(TypeId ty) override
+    {
+        if (FFlag::LuauClassTypeVarsInSubstitution && get<ClassType>(ty))
+            return true;
+
+        return ty->persistent;
+    }
+    bool ignoreChildren(TypePackId ty) override
+    {
+        return ty->persistent;
+    }
+};
+
+TypeId quantify(TypeArena* arena, TypeId ty, Scope* scope)
+{
+    PureQuantifier quantifier{arena, scope};
+    std::optional<TypeId> result = quantifier.substitute(ty);
+    LUAU_ASSERT(result);
+
+    FunctionType* ftv = getMutable<FunctionType>(*result);
     LUAU_ASSERT(ftv);
-    ftv->generics = q.generics;
-    ftv->genericPacks = q.genericPacks;
+    ftv->scope = scope;
+    ftv->generics.insert(ftv->generics.end(), quantifier.insertedGenerics.begin(), quantifier.insertedGenerics.end());
+    ftv->genericPacks.insert(ftv->genericPacks.end(), quantifier.insertedGenericPacks.begin(), quantifier.insertedGenericPacks.end());
+    ftv->hasNoGenerics = ftv->generics.empty() && ftv->genericPacks.empty() && !quantifier.seenGenericType && !quantifier.seenMutableType;
+
+    return *result;
 }
 
 } // namespace Luau

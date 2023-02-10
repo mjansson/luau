@@ -7,14 +7,20 @@
 #include "lstate.h"
 
 /*
+** Default settings for GC tunables (settable via lua_gc)
+*/
+#define LUAI_GCGOAL 200    // 200% (allow heap to double compared to live heap size)
+#define LUAI_GCSTEPMUL 200 // GC runs 'twice the speed' of memory allocation
+#define LUAI_GCSTEPSIZE 1  // GC runs every KB of memory allocation
+
+/*
 ** Possible states of the Garbage Collector
 */
 #define GCSpause 0
 #define GCSpropagate 1
 #define GCSpropagateagain 2
 #define GCSatomic 3
-#define GCSsweepstring 4
-#define GCSsweep 5
+#define GCSsweep 4
 
 /*
 ** macro to tell when main invariant (white objects cannot point to black
@@ -67,16 +73,9 @@
 
 #define luaC_white(g) cast_to(uint8_t, ((g)->currentwhite) & WHITEBITS)
 
-// Thread stack states
-#define THREAD_ACTIVEBIT 0   // thread is currently active
-#define THREAD_SLEEPINGBIT 1 // thread is not executing and stack should not be modified
-
-#define luaC_threadactive(L) (testbit((L)->stackstate, THREAD_ACTIVEBIT))
-#define luaC_threadsleeping(L) (testbit((L)->stackstate, THREAD_SLEEPINGBIT))
-
 #define luaC_checkGC(L) \
     { \
-        condhardstacktests(luaD_reallocstack(L, L->stacksize - EXTRA_STACK - 1)); \
+        condhardstacktests(luaD_reallocstack(L, L->stacksize - EXTRA_STACK)); \
         if (L->global->totalbytes >= L->global->GCthreshold) \
         { \
             condhardmemtests(luaC_validate(L), 1); \
@@ -103,7 +102,7 @@
 #define luaC_barrierfast(L, t) \
     { \
         if (isblack(obj2gco(t))) \
-            luaC_barrierback(L, t); \
+            luaC_barrierback(L, obj2gco(t), &t->gclist); \
     }
 
 #define luaC_objbarrier(L, p, o) \
@@ -112,37 +111,32 @@
             luaC_barrierf(L, obj2gco(p), obj2gco(o)); \
     }
 
-#define luaC_objbarriert(L, t, o) \
+#define luaC_threadbarrier(L) \
     { \
-        if (isblack(obj2gco(t)) && iswhite(obj2gco(o))) \
-            luaC_barriertable(L, t, obj2gco(o)); \
+        if (isblack(obj2gco(L))) \
+            luaC_barrierback(L, obj2gco(L), &L->gclist); \
     }
 
-#define luaC_upvalbarrier(L, uv, tv) \
+#define luaC_init(L, o, tt_) \
     { \
-        if (iscollectable(tv) && iswhite(gcvalue(tv)) && (!(uv) || ((UpVal*)uv)->v != &((UpVal*)uv)->u.value)) \
-            luaC_barrierupval(L, gcvalue(tv)); \
+        o->marked = luaC_white(L->global); \
+        o->tt = tt_; \
+        o->memcat = L->activememcat; \
     }
-
-#define luaC_checkthreadsleep(L) \
-    { \
-        if (luaC_threadsleeping(L)) \
-            luaC_wakethread(L); \
-    }
-
-#define luaC_link(L, o, tt) luaC_linkobj(L, cast_to(GCObject*, (o)), tt)
 
 LUAI_FUNC void luaC_freeall(lua_State* L);
+<<<<<<< HEAD
 LUAI_FUNC void luaC_step(lua_State* L, int assist);
+=======
+LUAI_FUNC size_t luaC_step(lua_State* L, bool assist);
+>>>>>>> c5089def6e0322883a4b9cc56bf2688f781533eb
 LUAI_FUNC void luaC_fullgc(lua_State* L);
-LUAI_FUNC void luaC_linkobj(lua_State* L, GCObject* o, uint8_t tt);
-LUAI_FUNC void luaC_linkupval(lua_State* L, UpVal* uv);
-LUAI_FUNC void luaC_barrierupval(lua_State* L, GCObject* v);
+LUAI_FUNC void luaC_initobj(lua_State* L, GCObject* o, uint8_t tt);
+LUAI_FUNC void luaC_upvalclosed(lua_State* L, UpVal* uv);
 LUAI_FUNC void luaC_barrierf(lua_State* L, GCObject* o, GCObject* v);
 LUAI_FUNC void luaC_barriertable(lua_State* L, Table* t, GCObject* v);
-LUAI_FUNC void luaC_barrierback(lua_State* L, Table* t);
+LUAI_FUNC void luaC_barrierback(lua_State* L, GCObject* o, GCObject** gclist);
 LUAI_FUNC void luaC_validate(lua_State* L);
 LUAI_FUNC void luaC_dump(lua_State* L, void* file, const char* (*categoryName)(lua_State* L, uint8_t memcat));
 LUAI_FUNC int64_t luaC_allocationrate(lua_State* L);
-LUAI_FUNC void luaC_wakethread(lua_State* L);
 LUAI_FUNC const char* luaC_statename(int state);
