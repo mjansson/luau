@@ -11,6 +11,13 @@
 #include <intrin.h>
 #endif
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#pragma clang diagnostic ignored "-Wextra-semi-stmt"
+#pragma clang diagnostic ignored "-Wimplicit-int-conversion"
+#endif
+
 // This work is based on:
 // Raffaello Giulietti. The Schubfach way to render doubles. 2021
 // https://drive.google.com/file/d/1IEeATSVnEE6TkrHlCYNY2GjaraBjOT4f/edit
@@ -20,8 +27,8 @@
 // 9.8.2. Precomputed table for 128-bit overestimates of powers of 10 (see figure 3 for table bounds)
 // To avoid storing 616 128-bit numbers directly we use a technique inspired by Dragonbox implementation and store 16 consecutive
 // powers using a 128-bit baseline and a bitvector with 1-bit scale and 3-bit offset for the delta between each entry and base*5^k
-static const int kPow10TableMin = -292;
-static const int kPow10TableMax = 324;
+#define kPow10TableMin ((int)-292)
+#define kPow10TableMax ((int)324)
 
 // clang-format off
 static const uint64_t kPow5Table[16] = {
@@ -57,22 +64,22 @@ static const char kDigitTable[] = "000102030405060708091011121314151617181920212
                                   "5051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899";
 
 // x*y => 128-bit product (lo+hi)
-inline uint64_t mul128(uint64_t x, uint64_t y, uint64_t* hi)
+static inline uint64_t mul128(uint64_t x, uint64_t y, uint64_t* hi)
 {
 #if defined(_MSC_VER) && defined(_M_X64)
     return _umul128(x, y, hi);
 #elif defined(__SIZEOF_INT128__)
     unsigned __int128 r = x;
     r *= y;
-    *hi = uint64_t(r >> 64);
-    return uint64_t(r);
+    *hi = (uint64_t)(r >> 64);
+    return (uint64_t)(r);
 #else
-    uint32_t x0 = uint32_t(x), x1 = uint32_t(x >> 32);
-    uint32_t y0 = uint32_t(y), y1 = uint32_t(y >> 32);
-    uint64_t p11 = uint64_t(x1) * y1, p01 = uint64_t(x0) * y1;
-    uint64_t p10 = uint64_t(x1) * y0, p00 = uint64_t(x0) * y0;
-    uint64_t mid = p10 + (p00 >> 32) + uint32_t(p01);
-    uint64_t r0 = (mid << 32) | uint32_t(p00);
+    uint32_t x0 = (uint32_t)(x), x1 = (uint32_t)(x >> 32);
+    uint32_t y0 = (uint32_t)(y), y1 = (uint32_t)(y >> 32);
+    uint64_t p11 = (uint64_t)(x1) * y1, p01 = (uint64_t)(x0) * y1;
+    uint64_t p10 = (uint64_t)(x1) * y0, p00 = (uint64_t)(x0) * y0;
+    uint64_t mid = p10 + (p00 >> 32) + (uint32_t)(p01);
+    uint64_t r0 = (mid << 32) | (uint32_t)(p00);
     uint64_t r1 = p11 + (mid >> 32) + (p01 >> 32);
     *hi = r1;
     return r0;
@@ -80,7 +87,7 @@ inline uint64_t mul128(uint64_t x, uint64_t y, uint64_t* hi)
 }
 
 // (x*y)>>64 => 128-bit product (lo+hi)
-inline uint64_t mul192hi(uint64_t xhi, uint64_t xlo, uint64_t y, uint64_t* hi)
+static inline uint64_t mul192hi(uint64_t xhi, uint64_t xlo, uint64_t y, uint64_t* hi)
 {
     uint64_t z2;
     uint64_t z1 = mul128(xhi, y, &z2);
@@ -97,7 +104,7 @@ inline uint64_t mul192hi(uint64_t xhi, uint64_t xlo, uint64_t y, uint64_t* hi)
 }
 
 // 9.3. Rounding to odd (+ figure 8 + result 23)
-inline uint64_t roundodd(uint64_t ghi, uint64_t glo, uint64_t cp)
+static inline uint64_t roundodd(uint64_t ghi, uint64_t glo, uint64_t cp)
 {
     uint64_t xhi;
     uint64_t xlo = mul128(glo, cp, &xhi);
@@ -110,11 +117,11 @@ inline uint64_t roundodd(uint64_t ghi, uint64_t glo, uint64_t cp)
     return (yhi + (z < xhi)) | (z > 1);
 }
 
-struct Decimal
+typedef struct Decimal
 {
     uint64_t s;
     int k;
-};
+} Decimal;
 
 static Decimal schubfach(int exponent, uint64_t fraction)
 {
@@ -129,12 +136,12 @@ static Decimal schubfach(int exponent, uint64_t fraction)
     }
 
     // 8.3. Fast path for integers
-    if (unsigned(-q) < 53 && (c & ((1ull << (-q)) - 1)) == 0)
-        return {c >> (-q), 0};
+    if ((unsigned)(-q) < 53 && (c & ((1ull << (-q)) - 1)) == 0)
+        return (Decimal){c >> (-q), 0};
 
     // 5. Rounding interval
     int irr = (c == (1ull << 52) && q != -1074); // Qmin
-    int out = int(c & 1);
+    int out = (int)(c & 1);
 
     // 9.8.1. Boundaries for c
     uint64_t cbl = 4 * c - 2 + irr;
@@ -180,21 +187,21 @@ static Decimal schubfach(int exponent, uint64_t fraction)
     {
         uint64_t sp = s / 10;
 
-        bool upin = vbl + out <= 40 * sp;
-        bool wpin = vbr >= 40 * sp + 40 + out;
+        int upin = vbl + out <= 40 * sp;
+        int wpin = vbr >= 40 * sp + 40 + out;
 
         if (upin != wpin)
-            return {sp + wpin, k + 1};
+            return (Decimal){sp + wpin, k + 1};
     }
 
     // Figure 7 contains the algorithm to select between u (s) and w (s+1)
     // rup computes the last 4 conditions in that algorithm
     // rup is only used when uin == win, but since these branches predict poorly we use branchless selects
-    bool uin = vbl + out <= 4 * s;
-    bool win = 4 * s + 4 + out <= vbr;
-    bool rup = vb >= 4 * s + 2 + 1 - (s & 1);
+    int uin = vbl + out <= 4 * s;
+    int win = 4 * s + 4 + out <= vbr;
+    int rup = vb >= 4 * s + 2 + 1 - (s & 1);
 
-    return {s + (uin != win ? win : rup), k};
+    return (Decimal){s + (uin != win ? win : rup), k};
 }
 
 static char* printspecial(char* buf, int sign, uint64_t fraction)
@@ -215,26 +222,26 @@ static char* printunsignedrev(char* end, uint64_t num)
 {
     while (num >= 10000)
     {
-        unsigned int tail = unsigned(num % 10000);
+        unsigned int tail = (unsigned)(num % 10000);
 
-        memcpy(end - 4, &kDigitTable[int(tail / 100) * 2], 2);
-        memcpy(end - 2, &kDigitTable[int(tail % 100) * 2], 2);
+        memcpy(end - 4, &kDigitTable[(int)(tail / 100) * 2], 2);
+        memcpy(end - 2, &kDigitTable[(int)(tail % 100) * 2], 2);
         num /= 10000;
         end -= 4;
     }
 
-    unsigned int rest = unsigned(num);
+    unsigned int rest = (unsigned)(num);
 
     while (rest >= 10)
     {
-        memcpy(end - 2, &kDigitTable[int(rest % 100) * 2], 2);
+        memcpy(end - 2, &kDigitTable[(int)(rest % 100) * 2], 2);
         rest /= 100;
         end -= 2;
     }
 
     if (rest)
     {
-        end[-1] = '0' + int(rest);
+        end[-1] = '0' + (int)(rest);
         end -= 1;
     }
 
@@ -258,7 +265,7 @@ static char* printexp(char* buf, int num)
     return buf + 2;
 }
 
-inline char* trimzero(char* end)
+static inline char* trimzero(char* end)
 {
     while (end[-1] == '0')
         end--;
@@ -278,8 +285,8 @@ char* luai_num2str(char* buf, double n)
         double v;
         uint64_t bits;
     } v = {n};
-    int sign = int(v.bits >> 63);
-    int exponent = int(v.bits >> 52) & 2047;
+    int sign = (int)(v.bits >> 63);
+    int exponent = (int)(v.bits >> 52) & 2047;
     uint64_t fraction = v.bits & ((1ull << 52) - 1);
 
     // specials
@@ -299,14 +306,14 @@ char* luai_num2str(char* buf, double n)
 
     // convert binary to decimal using Schubfach
     Decimal d = schubfach(exponent, fraction);
-    LUAU_ASSERT(d.s < uint64_t(1e17));
+    LUAU_ASSERT(d.s < (uint64_t)(1e17));
 
     // print the decimal to a temporary buffer; we'll need to insert the decimal point and figure out the format
     char decbuf[40];
     char* decend = decbuf + 20; // significand needs at most 17 digits; the rest of the buffer may be copied using fixed length memcpy
     char* dec = printunsignedrev(decend, d.s);
 
-    int declen = int(decend - dec);
+    int declen = (int)(decend - dec);
     LUAU_ASSERT(declen <= 17);
 
     int dot = declen + d.k;
@@ -364,3 +371,7 @@ char* luai_num2str(char* buf, double n)
         return printexp(exp, dot - 1);
     }
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif

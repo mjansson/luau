@@ -13,10 +13,10 @@ Udata* luaU_newudata(lua_State* L, size_t s, int tag)
         luaM_toobig(L);
     Udata* u = luaM_newgco(L, Udata, sizeudata(s), L->activememcat);
     luaC_init(L, u, LUA_TUSERDATA);
-    u->len = int(s);
+    u->len = (int)(s);
     u->metatable = NULL;
     LUAU_ASSERT(tag >= 0 && tag <= 255);
-    u->tag = uint8_t(tag);
+    u->tag = (uint8_t)(tag);
     return u;
 }
 
@@ -24,7 +24,7 @@ void luaU_freeudata(lua_State* L, Udata* u, lua_Page* page)
 {
     if (u->tag < LUA_UTAG_LIMIT)
     {
-        void (*dtor)(lua_State*, void*) = nullptr;
+        void (*dtor)(lua_State*, void*) = 0;
         dtor = L->global->udatagc[u->tag];
         // TODO: access to L here is highly unsafe since this is called during internal GC traversal
         // certain operations such as lua_getthreaddata are okay, but by and large this risks crashes on improper use
@@ -33,7 +33,7 @@ void luaU_freeudata(lua_State* L, Udata* u, lua_Page* page)
     }
     else if (u->tag == UTAG_IDTOR)
     {
-        void (*dtor)(void*) = nullptr;
+        void (*dtor)(void*) = 0;
         memcpy(&dtor, &u->data + u->len - sizeof(dtor), sizeof(dtor));
         if (dtor)
             dtor(u->data);

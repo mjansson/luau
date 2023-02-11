@@ -13,6 +13,14 @@
 #include <string.h>
 #include <stdio.h>
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#pragma clang diagnostic ignored "-Wextra-semi-stmt"
+#pragma clang diagnostic ignored "-Wunused-parameter"
+#pragma clang diagnostic ignored "-Wpedantic"
+#endif
+
 static void validateobjref(global_State* g, GCObject* f, GCObject* t)
 {
     LUAU_ASSERT(!isdead(g, t));
@@ -54,7 +62,7 @@ static void validatetable(global_State* g, Table* h)
 
         if (!ttisnil(gval(n)))
         {
-            TValue k = {};
+            TValue k = {0};
             k.tt = gkey(n)->tt;
             k.value = gkey(n)->value;
 
@@ -175,7 +183,7 @@ static void validateobj(global_State* g, GCObject* o)
         break;
 
     default:
-        LUAU_ASSERT(!"unexpected object type");
+        LUAU_ASSERT("unexpected object type" == 0);
     }
 }
 
@@ -203,19 +211,19 @@ static void validategraylist(global_State* g, GCObject* o)
             o = gco2p(o)->gclist;
             break;
         default:
-            LUAU_ASSERT(!"unknown object in gray list");
+            LUAU_ASSERT("unknown object in gray list" == 0);
             return;
         }
     }
 }
 
-static bool validategco(void* context, lua_Page* page, GCObject* gco)
+static int validategco(void* context, lua_Page* page, GCObject* gco)
 {
     lua_State* L = (lua_State*)context;
     global_State* g = L->global;
 
     validateobj(g, gco);
-    return false;
+    return 0;
 }
 
 void luaC_validate(lua_State* L)
@@ -246,19 +254,19 @@ void luaC_validate(lua_State* L)
     }
 }
 
-inline bool safejson(char ch)
+inline int safejson(char ch)
 {
-    return unsigned(ch) < 128 && ch >= 32 && ch != '\\' && ch != '\"';
+    return (unsigned)(ch) < 128 && ch >= 32 && ch != '\\' && ch != '\"';
 }
 
 static void dumpref(FILE* f, GCObject* o)
 {
-    fprintf(f, "\"%p\"", o);
+    fprintf(f, "\"%p\"", (void*)o);
 }
 
 static void dumprefs(FILE* f, TValue* data, size_t size)
 {
-    bool first = true;
+    int first = 1;
 
     for (size_t i = 0; i < size; ++i)
     {
@@ -266,7 +274,7 @@ static void dumprefs(FILE* f, TValue* data, size_t size)
         {
             if (!first)
                 fputc(',', f);
-            first = false;
+            first = 0;
 
             dumpref(f, gcvalue(&data[i]));
         }
@@ -281,7 +289,7 @@ static void dumpstringdata(FILE* f, const char* data, size_t len)
 
 static void dumpstring(FILE* f, TString* ts)
 {
-    fprintf(f, "{\"type\":\"string\",\"cat\":%d,\"size\":%d,\"data\":\"", ts->memcat, int(sizestring(ts->len)));
+    fprintf(f, "{\"type\":\"string\",\"cat\":%d,\"size\":%d,\"data\":\"", ts->memcat, (int)(sizestring(ts->len)));
     dumpstringdata(f, ts->data, ts->len);
     fprintf(f, "\"}");
 }
@@ -290,33 +298,33 @@ static void dumptable(FILE* f, Table* h)
 {
     size_t size = sizeof(Table) + (h->node == &luaH_dummynode ? 0 : sizenode(h) * sizeof(LuaNode)) + h->sizearray * sizeof(TValue);
 
-    fprintf(f, "{\"type\":\"table\",\"cat\":%d,\"size\":%d", h->memcat, int(size));
+    fprintf(f, "{\"type\":\"table\",\"cat\":%d,\"size\":%d", h->memcat, (int)(size));
 
     if (h->node != &luaH_dummynode)
     {
         fprintf(f, ",\"pairs\":[");
 
-        bool first = true;
+        int first = 1;
 
         for (int i = 0; i < sizenode(h); ++i)
         {
-            const LuaNode& n = h->node[i];
+            const LuaNode* n = &h->node[i];
 
-            if (!ttisnil(&n.val) && (iscollectable(&n.key) || iscollectable(&n.val)))
+            if (!ttisnil(&n->val) && (iscollectable(&n->key) || iscollectable(&n->val)))
             {
                 if (!first)
                     fputc(',', f);
-                first = false;
+                first = 0;
 
-                if (iscollectable(&n.key))
-                    dumpref(f, gcvalue(&n.key));
+                if (iscollectable(&n->key))
+                    dumpref(f, gcvalue(&n->key));
                 else
                     fprintf(f, "null");
 
                 fputc(',', f);
 
-                if (iscollectable(&n.val))
-                    dumpref(f, gcvalue(&n.val));
+                if (iscollectable(&n->val))
+                    dumpref(f, gcvalue(&n->val));
                 else
                     fprintf(f, "null");
             }
@@ -341,7 +349,7 @@ static void dumptable(FILE* f, Table* h)
 static void dumpclosure(FILE* f, Closure* cl)
 {
     fprintf(f, "{\"type\":\"function\",\"cat\":%d,\"size\":%d", cl->memcat,
-        cl->isC ? int(sizeCclosure(cl->nupvalues)) : int(sizeLclosure(cl->nupvalues)));
+        cl->isC ? (int)(sizeCclosure(cl->nupvalues)) : (int)(sizeLclosure(cl->nupvalues)));
 
     fprintf(f, ",\"env\":");
     dumpref(f, obj2gco(cl->env));
@@ -377,7 +385,7 @@ static void dumpclosure(FILE* f, Closure* cl)
 
 static void dumpudata(FILE* f, Udata* u)
 {
-    fprintf(f, "{\"type\":\"userdata\",\"cat\":%d,\"size\":%d,\"tag\":%d", u->memcat, int(sizeudata(u->len)), u->tag);
+    fprintf(f, "{\"type\":\"userdata\",\"cat\":%d,\"size\":%d,\"tag\":%d", u->memcat, (int)(sizeudata(u->len)), u->tag);
 
     if (u->metatable)
     {
@@ -391,7 +399,7 @@ static void dumpthread(FILE* f, lua_State* th)
 {
     size_t size = sizeof(lua_State) + sizeof(TValue) * th->stacksize + sizeof(CallInfo) * th->size_ci;
 
-    fprintf(f, "{\"type\":\"thread\",\"cat\":%d,\"size\":%d", th->memcat, int(size));
+    fprintf(f, "{\"type\":\"thread\",\"cat\":%d,\"size\":%d", th->memcat, (int)(size));
 
     fprintf(f, ",\"env\":");
     dumpref(f, obj2gco(th->gt));
@@ -422,7 +430,7 @@ static void dumpthread(FILE* f, lua_State* th)
         fprintf(f, "]");
 
         CallInfo* ci = th->base_ci;
-        bool first = true;
+        int first = 1;
 
         fprintf(f, ",\"stacknames\":[");
         for (StkId v = th->stack; v < th->top; ++v)
@@ -435,7 +443,7 @@ static void dumpthread(FILE* f, lua_State* th)
 
             if (!first)
                 fputc(',', f);
-            first = false;
+            first = 0;
 
             if (v == ci->func)
             {
@@ -458,7 +466,7 @@ static void dumpthread(FILE* f, lua_State* th)
             {
                 Proto* p = ci_func(ci)->l.p;
                 int pc = pcRel(ci->savedpc, p);
-                const LocVar* var = luaF_findlocal(p, int(v - ci->base), pc);
+                const LocVar* var = luaF_findlocal(p, (int)(v - ci->base), pc);
 
                 if (var && var->varname)
                     fprintf(f, "\"%s\"", getstr(var->varname));
@@ -478,7 +486,7 @@ static void dumpproto(FILE* f, Proto* p)
     size_t size = sizeof(Proto) + sizeof(Instruction) * p->sizecode + sizeof(Proto*) * p->sizep + sizeof(TValue) * p->sizek + p->sizelineinfo +
                   sizeof(LocVar) * p->sizelocvars + sizeof(TString*) * p->sizeupvalues;
 
-    fprintf(f, "{\"type\":\"proto\",\"cat\":%d,\"size\":%d", p->memcat, int(size));
+    fprintf(f, "{\"type\":\"proto\",\"cat\":%d,\"size\":%d", p->memcat, (int)(size));
 
     if (p->source)
     {
@@ -511,7 +519,7 @@ static void dumpproto(FILE* f, Proto* p)
 
 static void dumpupval(FILE* f, UpVal* uv)
 {
-    fprintf(f, "{\"type\":\"upvalue\",\"cat\":%d,\"size\":%d,\"open\":%s", uv->memcat, int(sizeof(UpVal)), upisopen(uv) ? "true" : "false");
+    fprintf(f, "{\"type\":\"upvalue\",\"cat\":%d,\"size\":%d,\"open\":%s", uv->memcat, (int)(sizeof(UpVal)), upisopen(uv) ? "true" : "false");
 
     if (iscollectable(uv->v))
     {
@@ -552,7 +560,7 @@ static void dumpobj(FILE* f, GCObject* o)
     }
 }
 
-static bool dumpgco(void* context, lua_Page* page, GCObject* gco)
+static int dumpgco(void* context, lua_Page* page, GCObject* gco)
 {
     FILE* f = (FILE*)context;
 
@@ -562,13 +570,13 @@ static bool dumpgco(void* context, lua_Page* page, GCObject* gco)
     fputc(',', f);
     fputc('\n', f);
 
-    return false;
+    return 0;
 }
 
 void luaC_dump(lua_State* L, void* file, const char* (*categoryName)(lua_State* L, uint8_t memcat))
 {
     global_State* g = L->global;
-    FILE* f = static_cast<FILE*>(file);
+    FILE* f = (FILE*)(file);
 
     fprintf(f, "{\"objects\":{\n");
 
@@ -585,20 +593,25 @@ void luaC_dump(lua_State* L, void* file, const char* (*categoryName)(lua_State* 
 
     fprintf(f, "},\"stats\":{\n");
 
-    fprintf(f, "\"size\":%d,\n", int(g->totalbytes));
+    fprintf(f, "\"size\":%d,\n", (int)(g->totalbytes));
 
     fprintf(f, "\"categories\":{\n");
     for (int i = 0; i < LUA_MEMORY_CATEGORIES; i++)
     {
-        if (size_t bytes = g->memcatbytes[i])
+        size_t bytes = g->memcatbytes[i];
+        if (bytes)
         {
             if (categoryName)
-                fprintf(f, "\"%d\":{\"name\":\"%s\", \"size\":%d},\n", i, categoryName(L, i), int(bytes));
+                fprintf(f, "\"%d\":{\"name\":\"%s\", \"size\":%d},\n", i, categoryName(L, (uint8_t)i), (int)(bytes));
             else
-                fprintf(f, "\"%d\":{\"size\":%d},\n", i, int(bytes));
+                fprintf(f, "\"%d\":{\"size\":%d},\n", i, (int)(bytes));
         }
     }
     fprintf(f, "\"none\":{}\n"); // to avoid issues with trailing ,
     fprintf(f, "}\n");
     fprintf(f, "}}\n");
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif

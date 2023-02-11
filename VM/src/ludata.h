@@ -10,7 +10,10 @@
 // special tag value is used for newproxy-created user data (all other user data objects are host-exposed)
 #define UTAG_PROXY (LUA_UTAG_LIMIT + 1)
 
-#define sizeudata(len) (offsetof(Udata, data) + len)
+#define sizeudata(len) (offsetof(Udata, data) + (size_t)len)
 
-LUAI_FUNC Udata* luaU_newudata(lua_State* L, size_t s, int tag);
-LUAI_FUNC void luaU_freeudata(lua_State* L, Udata* u, struct lua_Page* page);
+struct lua_State;
+struct lua_Page;
+
+LUAI_FUNC Udata* luaU_newudata(struct lua_State* L, size_t s, int tag);
+LUAI_FUNC void luaU_freeudata(struct lua_State* L, Udata* u, struct lua_Page* page);
