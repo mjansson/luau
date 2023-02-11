@@ -4,7 +4,7 @@
 
 #include "lua.h"
 
-struct lua_Page;
+typedef struct lua_Page lua_Page;
 union GCObject;
 
 #define luaM_newgco(L, t, size, memcat) cast_to(t*, luaM_newgco_(L, size, memcat))
@@ -18,9 +18,9 @@ union GCObject;
     ((v) = cast_to(t*, luaM_realloc_(L, v, (oldn) * sizeof(t), luaM_arraysize_(L, n, sizeof(t)), memcat)))
 
 LUAI_FUNC void* luaM_new_(lua_State* L, size_t nsize, uint8_t memcat);
-LUAI_FUNC GCObject* luaM_newgco_(lua_State* L, size_t nsize, uint8_t memcat);
+LUAI_FUNC union GCObject* luaM_newgco_(lua_State* L, size_t nsize, uint8_t memcat);
 LUAI_FUNC void luaM_free_(lua_State* L, void* block, size_t osize, uint8_t memcat);
-LUAI_FUNC void luaM_freegco_(lua_State* L, GCObject* block, size_t osize, uint8_t memcat, lua_Page* page);
+LUAI_FUNC void luaM_freegco_(lua_State* L, union GCObject* block, size_t osize, uint8_t memcat, lua_Page* page);
 LUAI_FUNC void* luaM_realloc_(lua_State* L, void* block, size_t osize, size_t nsize, uint8_t memcat);
 
 LUAI_FUNC l_noret luaM_toobig(lua_State* L);
@@ -28,5 +28,5 @@ LUAI_FUNC l_noret luaM_toobig(lua_State* L);
 LUAI_FUNC void luaM_getpagewalkinfo(lua_Page* page, char** start, char** end, int* busyBlocks, int* blockSize);
 LUAI_FUNC lua_Page* luaM_getnextgcopage(lua_Page* page);
 
-LUAI_FUNC void luaM_visitpage(lua_Page* page, void* context, bool (*visitor)(void* context, lua_Page* page, GCObject* gco));
-LUAI_FUNC void luaM_visitgco(lua_State* L, void* context, bool (*visitor)(void* context, lua_Page* page, GCObject* gco));
+LUAI_FUNC void luaM_visitpage(lua_Page* page, void* context, int (*visitor)(void* context, lua_Page* page, union GCObject* gco));
+LUAI_FUNC void luaM_visitgco(lua_State* L, void* context, int (*visitor)(void* context, lua_Page* page, union GCObject* gco));

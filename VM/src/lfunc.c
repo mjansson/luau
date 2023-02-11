@@ -130,11 +130,11 @@ void luaF_close(lua_State* L, StkId level)
         // unlink value *before* closing it since value storage overlaps
         L->openupval = uv->u.open.threadnext;
 
-        luaF_closeupval(L, uv, /* dead= */ false);
+        luaF_closeupval(L, uv, /* dead= */ 0);
     }
 }
 
-void luaF_closeupval(lua_State* L, UpVal* uv, bool dead)
+void luaF_closeupval(lua_State* L, UpVal* uv, int dead)
 {
     // unlink value from all lists *before* closing it since value storage overlaps
     LUAU_ASSERT(uv->u.open.next->u.open.prev == uv && uv->u.open.prev->u.open.next == uv);

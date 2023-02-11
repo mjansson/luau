@@ -417,11 +417,11 @@ enum LuauBytecodeTag
     // Types of constant table entries
     LBC_CONSTANT_NIL = 0,
     LBC_CONSTANT_BOOLEAN = 1,
-    LBC_CONSTANT_NUMBER,
-    LBC_CONSTANT_STRING,
-    LBC_CONSTANT_IMPORT,
-    LBC_CONSTANT_TABLE,
-    LBC_CONSTANT_CLOSURE,
+    LBC_CONSTANT_NUMBER = 2,
+    LBC_CONSTANT_STRING = 3,
+    LBC_CONSTANT_IMPORT = 4,
+    LBC_CONSTANT_TABLE = 5,
+    LBC_CONSTANT_CLOSURE = 6,
 };
 
 // Builtin function ids, used in LOP_FASTCALL

@@ -226,7 +226,7 @@ typedef struct TString
     int16_t atom;
     // 2 byte padding
 
-    TString* next; // next string in the hash table bucket
+    struct TString* next; // next string in the hash table bucket
 
     unsigned int hash;
     unsigned int len;

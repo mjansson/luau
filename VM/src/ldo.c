@@ -254,14 +254,14 @@ void luaD_call(lua_State* L, StkId func, int nResults)
     {                                        // is a Lua function?
         L->ci->flags |= LUA_CALLINFO_RETURN; // luau_execute will stop after returning from the stack frame
 
-        bool oldactive = L->isactive;
-        L->isactive = true;
+        int oldactive = L->isactive;
+        L->isactive = 1;
         luaC_threadbarrier(L);
 
         luau_execute(L); // call it
 
         if (!oldactive)
-            L->isactive = false;
+            L->isactive = 0;
     }
 
     L->nCcalls--;
@@ -438,7 +438,7 @@ static int resume_error(lua_State* L, const char* msg)
 static void resume_finish(lua_State* L, int status)
 {
     L->nCcalls = L->baseCcalls;
-    L->isactive = false;
+    L->isactive = 0;
 
     if (status != 0)
     {                                  // error?
@@ -463,7 +463,7 @@ int lua_resume(lua_State* L, lua_State* from, int nargs)
         return resume_error(L, "C stack overflow");
 
     L->baseCcalls = ++L->nCcalls;
-    L->isactive = true;
+    L->isactive = 1;
 
     luaC_threadbarrier(L);
 
@@ -492,7 +492,7 @@ int lua_resumeerror(lua_State* L, lua_State* from)
         return resume_error(L, "C stack overflow");
 
     L->baseCcalls = ++L->nCcalls;
-    L->isactive = true;
+    L->isactive = 1;
 
     luaC_threadbarrier(L);
 
@@ -557,7 +557,7 @@ int luaD_pcall(lua_State* L, Pfunc func, void* u, ptrdiff_t old_top, ptrdiff_t e
 {
     unsigned short oldnCcalls = L->nCcalls;
     ptrdiff_t old_ci = saveci(L, L->ci);
-    bool oldactive = L->isactive;
+    int oldactive = L->isactive;
     int status = luaD_rawrunprotected(L, func, u);
     if (status != 0)
     {
@@ -571,7 +571,7 @@ int luaD_pcall(lua_State* L, Pfunc func, void* u, ptrdiff_t old_top, ptrdiff_t e
 
         // since the call failed with an error, we might have to reset the 'active' thread state
         if (!oldactive)
-            L->isactive = false;
+            L->isactive = 0;
 
         // Restore nCcalls before calling the debugprotectederror callback which may rely on the proper value to have been restored.
         L->nCcalls = oldnCcalls;

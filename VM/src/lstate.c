@@ -236,7 +236,7 @@ lua_State* lua_newstate(lua_Alloc f, void* ud)
 
     g->memcatbytes[0] = sizeof(LG);
 
-    memset(&g->cb, 0, sizeof(g->cb,));
+    memset(&g->cb, 0, sizeof(g->cb));
 #if LUA_CUSTOM_EXECUTION
     memset(&g->ecb, 0, sizeof(g->ecb));
 #endif

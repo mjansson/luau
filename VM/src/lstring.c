@@ -82,7 +82,7 @@ static TString* newlstr(lua_State* L, const char* str, size_t l, unsigned int h)
     luaC_init(L, ts, LUA_TSTRING);
     ts->atom = ATOM_UNDEF;
     ts->hash = h;
-    ts->len = unsigned(l);
+    ts->len = (unsigned)(l);
 
     memcpy(ts->data, str, l);
     ts->data[l] = '\0'; // ending 0
@@ -108,7 +108,7 @@ TString* luaS_bufstart(lua_State* L, size_t size)
     luaC_init(L, ts, LUA_TSTRING);
     ts->atom = ATOM_UNDEF;
     ts->hash = 0; // computed in luaS_buffinish
-    ts->len = unsigned(size);
+    ts->len = (unsigned)(size);
 
     ts->next = NULL;
 
@@ -165,18 +165,18 @@ TString* luaS_newlstr(lua_State* L, const char* str, size_t l)
     return newlstr(L, str, l, h); // not found
 }
 
-static bool unlinkstr(lua_State* L, TString* ts)
+static int unlinkstr(lua_State* L, TString* ts)
 {
     global_State* g = L->global;
 
     TString** p = &g->strt.hash[lmod(ts->hash, g->strt.size)];
-
-    while (TString* curr = *p)
+    TString* curr;
+    while ((curr = *p))
     {
         if (curr == ts)
         {
             *p = curr->next;
-            return true;
+            return 1;
         }
         else
         {
@@ -184,7 +184,7 @@ static bool unlinkstr(lua_State* L, TString* ts)
         }
     }
 
-    return false;
+    return 0;
 }
 
 void luaS_free(lua_State* L, TString* ts, lua_Page* page)

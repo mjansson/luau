@@ -1561,7 +1561,7 @@ static int str_unpack(lua_State* L)
     if (pos < 0)
         pos = 0;
     int n = 0; // number of results
-    luaL_argcheck(L, size_t(pos) <= ld, 3, "initial position out of string");
+    luaL_argcheck(L, (size_t)(pos) <= ld, 3, "initial position out of string");
     initheader(L, &h);
     while (*fmt != '\0')
     {

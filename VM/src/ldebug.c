@@ -16,11 +16,11 @@
 #pragma clang diagnostic push
 #if __has_warning("-Wsign-conversion")
 #pragma clang diagnostic ignored "-Wsign-conversion"
+#endif
 #pragma clang diagnostic ignored "-Wextra-semi-stmt"
 #endif
-#endif
 
-LUAU_FASTFLAGVARIABLE(LuauCheckGetInfoIndex, false)
+LUAU_FASTFLAGVARIABLE(LuauCheckGetInfoIndex, 0);
 
 static const char* getfuncname(Closure* f);
 
@@ -176,7 +176,7 @@ static Closure* auxgetinfo(lua_State* L, const char* what, lua_Debug* ar, Closur
 
 int lua_stackdepth(lua_State* L)
 {
-    return int(L->ci - L->base_ci);
+    return (int)(L->ci - L->base_ci);
 }
 
 int lua_getinfo(lua_State* L, int level, const char* what, lua_Debug* ar)
@@ -185,7 +185,7 @@ int lua_getinfo(lua_State* L, int level, const char* what, lua_Debug* ar)
     CallInfo* ci = NULL;
     if (level < 0)
     {
-        if (FFlag::LuauCheckGetInfoIndex)
+        if (LuauCheckGetInfoIndex)
         {
             const TValue* func = luaA_toobject(L, level);
             api_check(L, ttisfunction(func));
@@ -207,7 +207,8 @@ int lua_getinfo(lua_State* L, int level, const char* what, lua_Debug* ar)
     if (f)
     {
         // auxgetinfo fills ar and optionally requests to put closure on stack
-        if (Closure* fcl = auxgetinfo(L, what, ar, f, ci))
+        Closure* fcl = auxgetinfo(L, what, ar, f, ci);
+        if (fcl)
         {
             luaC_threadbarrier(L);
             setclvalue(L, L->top, fcl);
@@ -477,7 +478,7 @@ int lua_breakpoint(lua_State* L, int funcindex, int line, int enabled)
     if (target != -1)
     {
         // Add breakpoint on the exact line
-        luaG_breakpoint(L, p, target, bool(enabled));
+        luaG_breakpoint(L, p, target, enabled);
     }
 
     return target;
@@ -496,7 +497,7 @@ static void getcoverage(Proto* p, int depth, int* buffer, size_t size, void* con
         int line = luaG_getline(p, i);
         int hits = LUAU_INSN_E(insn);
 
-        LUAU_ASSERT(size_t(line) < size);
+        LUAU_ASSERT((size_t)(line) < size);
         buffer[line] = buffer[line] < hits ? hits : buffer[line];
     }
 
@@ -577,7 +578,7 @@ const char* lua_debugtrace(lua_State* L)
 #ifdef _MSC_VER
             sprintf_s(skip, sizeof(skip), "... (+%d frames)\n", (int)(depth - limit1 - limit2));
 #else
-            snprintf(skip, sizeof(skip), "... (+%d frames)\n", int(depth - limit1 - limit2));
+            snprintf(skip, sizeof(skip), "... (+%d frames)\n", (int)(depth - limit1 - limit2));
 #endif
 
             offset = append(buf, sizeof(buf), offset, skip);

@@ -522,7 +522,7 @@ const char* luaL_tolstring(lua_State* L, int idx, size_t* len)
                 *e++ = ',';
                 *e++ = ' ';
             }
-            e = luai_num2str(e, v[i]);
+            e = luai_num2str(e, (double)v[i]);
         }
         lua_pushlstring(L, s, e - s);
         break;

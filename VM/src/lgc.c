@@ -17,6 +17,7 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"
 #pragma clang diagnostic ignored "-Wextra-semi-stmt"
+#pragma clang diagnostic ignored "-Wcast-align"
 #endif
 
 /*
@@ -154,7 +155,7 @@
     }
 
 #ifdef LUAI_GCMETRICS
-static void recordGcStateStep(global_State* g, int startgcstate, double seconds, bool assist, size_t work)
+static void recordGcStateStep(global_State* g, int startgcstate, double seconds, int assist, size_t work)
 {
     switch (startgcstate)
     {
@@ -311,7 +312,8 @@ static int traversetable(global_State* g, Table* h)
         markobject(g, cast_to(Table*, h->metatable));
 
     // is there a weak mode?
-    if (const char* modev = gettablemode(g, h))
+    const char* modev = gettablemode(g, h);
+    if (modev)
     {
         weakkey = (strchr(modev, 'k') != NULL);
         weakvalue = (strchr(modev, 'v') != NULL);
@@ -475,7 +477,7 @@ static size_t propagatemark(global_State* g)
         lua_State* th = gco2th(o);
         g->gray = th->gclist;
 
-        bool active = th->isactive || th == th->global->mainthread;
+        int active = th->isactive || th == th->global->mainthread;
 
         traversestack(g, th);
 
@@ -650,11 +652,11 @@ static void shrinkbuffersfull(lua_State* L)
         luaS_resize(L, hashsize); // table is too big
 }
 
-static bool deletegco(void* context, lua_Page* page, GCObject* gco)
+static int deletegco(void* context, lua_Page* page, GCObject* gco)
 {
     lua_State* L = (lua_State*)context;
     freeobj(L, gco, page);
-    return true;
+    return 1;
 }
 
 void luaC_freeall(lua_State* L)
@@ -851,11 +853,11 @@ static int sweepgcopage(lua_State* L, lua_Page* page)
 
             // if the last block was removed, page would be removed as well
             if (--busyBlocks == 0)
-                return int(pos - start) / blockSize + 1;
+                return (int)(pos - start) / blockSize + 1;
         }
     }
 
-    return int(end - start) / blockSize;
+    return (int)(end - start) / blockSize;
 }
 
 static size_t gcstep(lua_State* L, size_t limit)
@@ -999,7 +1001,7 @@ static size_t getheaptrigger(global_State* g, size_t heapgoal)
         return heapgoal;
 
     double allocationrate = (double)(g->gcstats.atomicstarttotalsizebytes - g->gcstats.endtotalsizebytes) / allocationduration;
-    double markduration = (int64_t)(g->gcstats.atomicstarttimestamp - g->gcstats.starttimestamp);
+    double markduration = (double)((int64_t)(g->gcstats.atomicstarttimestamp - g->gcstats.starttimestamp));
 
     int64_t expectedgrowth = (int64_t)(markduration * allocationrate);
     int64_t offset = getheaptriggererroroffset(g);
@@ -1009,7 +1011,7 @@ static size_t getheaptrigger(global_State* g, size_t heapgoal)
     return heaptrigger < (int64_t)(g->totalbytes) ? g->totalbytes : (heaptrigger > (int64_t)(heapgoal) ? heapgoal : (size_t)(heaptrigger));
 }
 
-size_t luaC_step(lua_State* L, bool assist)
+size_t luaC_step(lua_State* L, int assist)
 {
     global_State* g = L->global;
 
@@ -1036,6 +1038,8 @@ size_t luaC_step(lua_State* L, bool assist)
 
 #ifdef LUAI_GCMETRICS
     recordGcStateStep(g, lastgcstate, lua_clock() - lasttimestamp, assist, work);
+#else
+    (void)sizeof(assist);
 #endif
 
     size_t actualstepsize = work * 100 / g->gcstepmul;
@@ -1218,7 +1222,7 @@ int64_t luaC_allocationrate(lua_State* L)
         if (duration < durationthreshold)
             return -1;
 
-        return (int64_t)((double)(g->totalbytes - g->gcstats.lastcycle.endtotalsizebytes) / duration);
+        return (int64_t)((double)(g->totalbytes - g->gcstats.endtotalsizebytes) / duration);
     }
 
     // totalbytes is unstable during the sweep, use the rate measured at the end of mark phase

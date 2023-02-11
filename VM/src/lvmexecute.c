@@ -75,8 +75,8 @@
 #define VM_KV(i) (LUAU_ASSERT((unsigned)(i) < (unsigned)(cl->l.p->sizek)), &k[i])
 #define VM_UV(i) (LUAU_ASSERT((unsigned)(i) < (unsigned)(cl->nupvalues)), &cl->l.uprefs[i])
 
-#define VM_PATCH_C(pc, slot) *((Instruction*)(pc)) = ((uint8_t(slot) << 24) | (0x00ffffffu & *(pc)))
-#define VM_PATCH_E(pc, slot) *((Instruction*)(pc)) = ((uint32_t(slot) << 8) | (0x000000ffu & *(pc)))
+#define VM_PATCH_C(pc, slot) *((Instruction*)(pc)) = (((uint8_t)(slot) << 24) | (0x00ffffffu & *(pc)))
+#define VM_PATCH_E(pc, slot) *((Instruction*)(pc)) = (((uint32_t)(slot) << 8) | (0x000000ffu & *(pc)))
 
 #define VM_INTERRUPT() \
     { \
@@ -133,8 +133,8 @@
  */
 #if VM_USE_CGOTO
 #define VM_CASE(op) CASE_##op:
-#define VM_NEXT() goto*(SingleStep ? &&dispatch : kDispatchTable[LUAU_INSN_OP(*pc)])
-#define VM_CONTINUE(op) goto* kDispatchTable[uint8_t(op)]
+#define VM_NEXT() goto*(L->singlestep ? &&dispatch : kDispatchTable[LUAU_INSN_OP(*pc)])
+#define VM_CONTINUE(op) goto* kDispatchTable[(uint8_t)(op)]
 #else
 #define VM_CASE(op) case op:
 #define VM_NEXT() goto dispatch
@@ -793,7 +793,7 @@ reentry:
                         break;
 
                     default:
-                        LUAU_ASSERT(!"Unknown upvalue capture type");
+                        LUAU_ASSERT("Unknown upvalue capture type" == 0);
                         LUAU_UNREACHABLE(); // improves switch() codegen by eliding opcode bounds checks
                     }
                 }
@@ -1200,7 +1200,7 @@ reentry:
                         break;
 
                     default:
-                        LUAU_ASSERT(!"Unknown value type");
+                        LUAU_ASSERT("Unknown value type" == 0);
                         LUAU_UNREACHABLE(); // improves switch() codegen by eliding opcode bounds checks
                     }
 
@@ -1314,7 +1314,7 @@ reentry:
                         break;
 
                     default:
-                        LUAU_ASSERT(!"Unknown value type");
+                        LUAU_ASSERT("Unknown value type" == 0);
                         LUAU_UNREACHABLE(); // improves switch() codegen by eliding opcode bounds checks
                     }
 
@@ -2189,7 +2189,8 @@ reentry:
                 {
                     Table* mt = ttistable(ra) ? hvalue(ra)->metatable : ttisuserdata(ra) ? uvalue(ra)->metatable : cast_to(Table*, NULL);
 
-                    if (const TValue* fn = fasttm(L, mt, TM_ITER))
+                    const TValue* fn = fasttm(L, mt, TM_ITER);
+                    if (fn)
                     {
                         setobj2s(L, ra + 1, ra);
                         setobj2s(L, ra, fn);
@@ -2219,7 +2220,7 @@ reentry:
                     {
                         // set up registers for builtin iteration
                         setobj2s(L, ra + 1, ra);
-                        setpvalue(ra + 2, reinterpret_cast<void*>(uintptr_t(0)));
+                        setpvalue(ra + 2, (void*)0);
                         setnilvalue(ra);
                     }
                     else
@@ -2230,7 +2231,7 @@ reentry:
                 }
 
                 pc += LUAU_INSN_D(insn);
-                LUAU_ASSERT(unsigned(pc - cl->l.p->code) < unsigned(cl->l.p->sizecode));
+                LUAU_ASSERT((unsigned)(pc - cl->l.p->code) < (unsigned)(cl->l.p->sizecode));
                 VM_NEXT();
             }
 
@@ -2253,12 +2254,12 @@ reentry:
 
                     // clear extra variables since we might have more than two
                     // note: while aux encodes ipairs bit, when set we always use 2 variables, so it's safe to check this via a signed comparison
-                    if (LUAU_UNLIKELY(int(aux) > 2))
-                        for (int i = 2; i < int(aux); ++i)
+                    if (LUAU_UNLIKELY((int)(aux) > 2))
+                        for (int i = 2; i < (int)(aux); ++i)
                             setnilvalue(ra + 3 + i);
 
                     // terminate ipairs-style traversal early when encountering nil
-                    if (int(aux) < 0 && (unsigned(index) >= unsigned(sizearray) || ttisnil(&h->array[index])))
+                    if ((int)(aux) < 0 && ((unsigned)(index) >= (unsigned)(sizearray) || ttisnil(&h->array[index])))
                     {
                         pc++;
                         VM_NEXT();
@@ -2271,8 +2272,8 @@ reentry:
 
                         if (!ttisnil(e))
                         {
-                            setpvalue(ra + 2, reinterpret_cast<void*>(uintptr_t(index + 1)));
-                            setnvalue(ra + 3, double(index + 1));
+                            setpvalue(ra + 2, (void*)((uintptr_t)(index + 1)));
+                            setnvalue(ra + 3, (double)(index + 1));
                             setobj2s(L, ra + 4, e);
 
                             pc += LUAU_INSN_D(insn);
@@ -2318,7 +2319,7 @@ reentry:
                     L->top = ra + 3 + 3; // func + 2 args (state and index)
                     LUAU_ASSERT(L->top <= L->stack_last);
 
-                    VM_PROTECT(luaD_call(L, ra + 3, uint8_t(aux)));
+                    VM_PROTECT(luaD_call(L, ra + 3, (uint8_t)(aux)));
                     L->top = L->ci->top;
 
                     // recompute ra since stack might have been reallocated
@@ -2329,7 +2330,7 @@ reentry:
 
                     // note that we need to increment pc by 1 to exit the loop since we need to skip over aux
                     pc += ttisnil(ra + 3) ? 1 : LUAU_INSN_D(insn);
-                    LUAU_ASSERT(unsigned(pc - cl->l.p->code) < unsigned(cl->l.p->sizecode));
+                    LUAU_ASSERT((unsigned)(pc - cl->l.p->code) < (unsigned)(cl->l.p->sizecode));
                     VM_NEXT();
                 }
             }
@@ -2344,7 +2345,7 @@ reentry:
                 {
                     setnilvalue(ra);
                     // ra+1 is already the table
-                    setpvalue(ra + 2, reinterpret_cast<void*>(uintptr_t(0)));
+                    setpvalue(ra + 2, (void*)0);
                 }
                 else if (!ttisfunction(ra))
                 {
@@ -2353,13 +2354,13 @@ reentry:
                 }
 
                 pc += LUAU_INSN_D(insn);
-                LUAU_ASSERT(unsigned(pc - cl->l.p->code) < unsigned(cl->l.p->sizecode));
+                LUAU_ASSERT((unsigned)(pc - cl->l.p->code) < (unsigned)(cl->l.p->sizecode));
                 VM_NEXT();
             }
 
             VM_CASE(LOP_DEP_FORGLOOP_INEXT)
             {
-                LUAU_ASSERT(!"Unsupported deprecated opcode");
+                LUAU_ASSERT("Unsupported deprecated opcode" == 0);
                 LUAU_UNREACHABLE();
             }
 
@@ -2373,7 +2374,7 @@ reentry:
                 {
                     setnilvalue(ra);
                     // ra+1 is already the table
-                    setpvalue(ra + 2, reinterpret_cast<void*>(uintptr_t(0)));
+                    setpvalue(ra + 2, (void*)0);
                 }
                 else if (!ttisfunction(ra))
                 {
@@ -2382,13 +2383,13 @@ reentry:
                 }
 
                 pc += LUAU_INSN_D(insn);
-                LUAU_ASSERT(unsigned(pc - cl->l.p->code) < unsigned(cl->l.p->sizecode));
+                LUAU_ASSERT((unsigned)(pc - cl->l.p->code) < (unsigned)(cl->l.p->sizecode));
                 VM_NEXT();
             }
 
             VM_CASE(LOP_DEP_FORGLOOP_NEXT)
             {
-                LUAU_ASSERT(!"Unsupported deprecated opcode");
+                LUAU_ASSERT("Unsupported deprecated opcode" == 0);
                 LUAU_UNREACHABLE();
             }
 
@@ -2608,13 +2609,13 @@ reentry:
 
             VM_CASE(LOP_DEP_JUMPIFEQK)
             {
-                LUAU_ASSERT(!"Unsupported deprecated opcode");
+                LUAU_ASSERT("Unsupported deprecated opcode" == 0);
                 LUAU_UNREACHABLE();
             }
 
             VM_CASE(LOP_DEP_JUMPIFNOTEQK)
             {
-                LUAU_ASSERT(!"Unsupported deprecated opcode");
+                LUAU_ASSERT("Unsupported deprecated opcode" == 0);
                 LUAU_UNREACHABLE();
             }
 
@@ -2793,8 +2794,8 @@ reentry:
 
                 static_assert(LUA_TNIL == 0, "we expect type-1 to be negative iff type is nil");
                 // condition is equivalent to: int(ttisnil(ra)) != (aux >> 31)
-                pc += int((ttype(ra) - 1) ^ aux) < 0 ? LUAU_INSN_D(insn) : 1;
-                LUAU_ASSERT(unsigned(pc - cl->l.p->code) < unsigned(cl->l.p->sizecode));
+                pc += (int)((ttype(ra) - 1) ^ aux) < 0 ? LUAU_INSN_D(insn) : 1;
+                LUAU_ASSERT((unsigned)(pc - cl->l.p->code) < (unsigned)(cl->l.p->sizecode));
                 VM_NEXT();
             }
 
@@ -2804,8 +2805,8 @@ reentry:
                 uint32_t aux = *pc;
                 StkId ra = VM_REG(LUAU_INSN_A(insn));
 
-                pc += int(ttisboolean(ra) && bvalue(ra) == int(aux & 1)) != (aux >> 31) ? LUAU_INSN_D(insn) : 1;
-                LUAU_ASSERT(unsigned(pc - cl->l.p->code) < unsigned(cl->l.p->sizecode));
+                pc += (int)(ttisboolean(ra) && bvalue(ra) == (int)(aux & 1)) != (aux >> 31) ? LUAU_INSN_D(insn) : 1;
+                LUAU_ASSERT((unsigned)(pc - cl->l.p->code) < (unsigned)(cl->l.p->sizecode));
                 VM_NEXT();
             }
 
@@ -2825,9 +2826,9 @@ reentry:
                 else
                     pc += (ttisnumber(ra) && nvalue(ra) == nvalue(kv)) ? LUAU_INSN_D(insn) : 1;
 #else
-                pc += int(ttisnumber(ra) && nvalue(ra) == nvalue(kv)) != (aux >> 31) ? LUAU_INSN_D(insn) : 1;
+                pc += (int)(ttisnumber(ra) && nvalue(ra) == nvalue(kv)) != (aux >> 31) ? LUAU_INSN_D(insn) : 1;
 #endif
-                LUAU_ASSERT(unsigned(pc - cl->l.p->code) < unsigned(cl->l.p->sizecode));
+                LUAU_ASSERT((unsigned)(pc - cl->l.p->code) < (unsigned)(cl->l.p->sizecode));
                 VM_NEXT();
             }
 
@@ -2839,8 +2840,8 @@ reentry:
                 TValue* kv = VM_KV(aux & 0xffffff);
                 LUAU_ASSERT(ttisstring(kv));
 
-                pc += int(ttisstring(ra) && gcvalue(ra) == gcvalue(kv)) != (aux >> 31) ? LUAU_INSN_D(insn) : 1;
-                LUAU_ASSERT(unsigned(pc - cl->l.p->code) < unsigned(cl->l.p->sizecode));
+                pc += (int)(ttisstring(ra) && gcvalue(ra) == gcvalue(kv)) != (aux >> 31) ? LUAU_INSN_D(insn) : 1;
+                LUAU_ASSERT((unsigned)(pc - cl->l.p->code) < (unsigned)(cl->l.p->sizecode));
                 VM_NEXT();
             }
 

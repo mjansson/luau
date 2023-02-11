@@ -1129,10 +1129,10 @@ static int luauF_select(lua_State* L, StkId res, TValue* arg0, int nresults, Stk
 
         if (ttisnumber(arg0))
         {
-            int i = int(nvalue(arg0));
+            int i = (int)(nvalue(arg0));
 
             // i >= 1 && i <= n
-            if (unsigned(i - 1) < unsigned(n))
+            if ((unsigned)(i - 1) < (unsigned)(n))
             {
                 setobj2s(L, res, L->base - n + (i - 1));
                 return 1;
@@ -1141,7 +1141,7 @@ static int luauF_select(lua_State* L, StkId res, TValue* arg0, int nresults, Stk
         }
         else if (ttisstring(arg0) && *svalue(arg0) == '#')
         {
-            setnvalue(res, double(n));
+            setnvalue(res, (double)(n));
             return 1;
         }
     }
@@ -1156,13 +1156,13 @@ static int luauF_rawlen(lua_State* L, StkId res, TValue* arg0, int nresults, Stk
         if (ttistable(arg0))
         {
             Table* h = hvalue(arg0);
-            setnvalue(res, double(luaH_getn(h)));
+            setnvalue(res, (double)(luaH_getn(h)));
             return 1;
         }
         else if (ttisstring(arg0))
         {
             TString* ts = tsvalue(arg0);
-            setnvalue(res, double(ts->len));
+            setnvalue(res, (double)(ts->len));
             return 1;
         }
     }
@@ -1180,7 +1180,7 @@ static int luauF_extractk(lua_State* L, StkId res, TValue* arg0, int nresults, S
 
         unsigned n;
         luai_num2unsigned(n, a1);
-        int fw = int(a2);
+        int fw = (int)(a2);
 
         int f = fw & 31;
         int w1 = fw >> 5;
@@ -1188,7 +1188,7 @@ static int luauF_extractk(lua_State* L, StkId res, TValue* arg0, int nresults, S
         uint32_t m = ~(0xfffffffeu << w1);
         uint32_t r = (n >> f) & m;
 
-        setnvalue(res, double(r));
+        setnvalue(res, (double)(r));
         return 1;
     }
 

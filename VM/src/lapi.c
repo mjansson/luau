@@ -6,6 +6,7 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"
 #pragma clang diagnostic ignored "-Wcast-qual"
+#pragma clang diagnostic ignored "-Wcast-align"
 #pragma clang diagnostic ignored "-Wfloat-equal"
 #pragma clang diagnostic ignored "-Wextra-semi-stmt"
 #endif
@@ -1097,7 +1098,7 @@ int lua_gc(lua_State* L, int what, int data)
 
         while (g->GCthreshold <= g->totalbytes)
         {
-            size_t stepsize = luaC_step(L, false);
+            size_t stepsize = luaC_step(L, 0);
 
             actualwork += stepsize;
 
@@ -1203,14 +1204,14 @@ int lua_rawiter(lua_State* L, int idx, int iter)
     int sizearray = h->sizearray;
 
     // first we advance iter through the array portion
-    for (; unsigned(iter) < unsigned(sizearray); ++iter)
+    for (; (unsigned)(iter) < (unsigned)(sizearray); ++iter)
     {
         TValue* e = &h->array[iter];
 
         if (!ttisnil(e))
         {
             StkId top = L->top;
-            setnvalue(top + 0, double(iter + 1));
+            setnvalue(top + 0, (double)(iter + 1));
             setobj2s(L, top + 1, e);
             api_update_top(L, top + 2);
             return iter + 1;
@@ -1220,7 +1221,7 @@ int lua_rawiter(lua_State* L, int idx, int iter)
     int sizenode = 1 << h->lsizenode;
 
     // then we advance iter through the hash portion
-    for (; unsigned(iter - sizearray) < unsigned(sizenode); ++iter)
+    for (; (unsigned)(iter - sizearray) < (unsigned)(sizenode); ++iter)
     {
         LuaNode* n = &h->node[iter - sizearray];
 
@@ -1259,7 +1260,7 @@ void lua_concat(lua_State* L, int n)
 
 void* lua_newuserdatatagged(lua_State* L, size_t sz, int tag)
 {
-    api_check(L, unsigned(tag) < LUA_UTAG_LIMIT || tag == UTAG_PROXY);
+    api_check(L, (unsigned)(tag) < LUA_UTAG_LIMIT || tag == UTAG_PROXY);
     luaC_checkGC(L);
     luaC_threadbarrier(L);
     Udata* u = luaU_newudata(L, sz, tag);
@@ -1384,10 +1385,10 @@ void lua_unref(lua_State* L, int ref)
 
 void lua_setuserdatatag(lua_State* L, int idx, int tag)
 {
-    api_check(L, unsigned(tag) < LUA_UTAG_LIMIT);
+    api_check(L, (unsigned)(tag) < LUA_UTAG_LIMIT);
     StkId o = index2addr(L, idx);
     api_check(L, ttisuserdata(o));
-    uvalue(o)->tag = uint8_t(tag);
+    uvalue(o)->tag = (uint8_t)(tag);
 }
 
 void lua_setuserdatadtor(lua_State* L, int tag, void (*dtor)(lua_State*, void*))
@@ -1427,8 +1428,8 @@ lua_Callbacks* lua_callbacks(lua_State* L)
 
 void lua_setmemcat(lua_State* L, int category)
 {
-    api_check(L, unsigned(category) < LUA_MEMORY_CATEGORIES);
-    L->activememcat = uint8_t(category);
+    api_check(L, (unsigned)(category) < LUA_MEMORY_CATEGORIES);
+    L->activememcat = (uint8_t)(category);
 }
 
 size_t lua_totalbytes(lua_State* L, int category)

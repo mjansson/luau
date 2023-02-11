@@ -441,7 +441,7 @@ static void resize(lua_State* L, Table* t, int nasize, int nhsize)
 
 static int adjustasize(Table* t, int size, const TValue* ek)
 {
-    bool tbound = t->node != dummynode || size < t->sizearray;
+    int tbound = t->node != dummynode || size < t->sizearray;
     int ekindex = ek && ttisnumber(ek) ? arrayindex(nvalue(ek)) : -1;
     // move the array size up until the boundary is guaranteed to be inside the array part
     while (size + 1 == ekindex || (tbound && !ttisnil(luaH_getnum(t, size + 1))))

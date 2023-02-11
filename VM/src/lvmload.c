@@ -123,27 +123,12 @@ static void runResolveImport(lua_State* L, void* ud)
     // note: we call getimport with nil propagation which means that accesses to table chains like A.B.C will resolve in nil
     // this is technically not necessary but it reduces the number of exceptions when loading scripts that rely on getfenv/setfenv for global
     // injection
-    luaV_getimport(L, hvalue(gt(L)), self->k, self->id, /* propagatenil= */ 1);
+    luaV_getimport(L, L->gt, self->k, self->id, /* propagatenil= */ 1);
 }
 
 static void resolveImportSafe(lua_State* L, Table* env, TValue* k, uint32_t id)
 {
-    struct ResolveImport
-    {
-        TValue* k;
-        uint32_t id;
-
-        static void run(lua_State* L, void* ud)
-        {
-            ResolveImport* self = static_cast<ResolveImport*>(ud);
-
-            // note: we call getimport with nil propagation which means that accesses to table chains like A.B.C will resolve in nil
-            // this is technically not necessary but it reduces the number of exceptions when loading scripts that rely on getfenv/setfenv for global
-            // injection
-            luaV_getimport(L, L->gt, self->k, self->id, /* propagatenil= */ true);
-        }
-    };
-
+    (void)sizeof(env);
     ResolveImport ri = {k, id};
     if (L->gt->safeenv)
     {
@@ -176,7 +161,7 @@ int luau_load(lua_State* L, const char* chunkname, const char* data, size_t size
     {
         char chunkbuf[LUA_IDSIZE];
         const char* chunkid = luaO_chunkid(chunkbuf, sizeof(chunkbuf), chunkname, strlen(chunkname));
-        lua_pushfstring(L, "%s%.*s", chunkid, int(size - offset), data + offset);
+        lua_pushfstring(L, "%s%.*s", chunkid, (int)(size - offset), data + offset);
         return 1;
     }
 
@@ -200,7 +185,7 @@ int luau_load(lua_State* L, const char* chunkname, const char* data, size_t size
 
     // string table
     unsigned int stringCount = readVarInt(data, size, &offset);
-    TString** strings = luaM_new(L, TString*, sizeof(TString*) * stringCount, L->activememcat);
+    TString** strings = luaM_newarray(L, stringCount, TString*, 0);
 
     for (unsigned int i = 0; i < stringCount; ++i)
     {
@@ -212,13 +197,13 @@ int luau_load(lua_State* L, const char* chunkname, const char* data, size_t size
 
     // proto table
     unsigned int protoCount = readVarInt(data, size, &offset);
-    Proto** protos = luaM_new(L, Proto*, sizeof(Proto*) * protoCount, L->activememcat);
+    Proto** protos = luaM_newarray(L, protoCount, Proto*, 0);
 
     for (unsigned int i = 0; i < protoCount; ++i)
     {
         Proto* p = luaF_newproto(L);
         p->source = source;
-        p->bytecodeid = int(i);
+        p->bytecodeid = (int)(i);
 
         p->maxstacksize = read_uint8_t(data, size, &offset);
         p->numparams = read_uint8_t(data, size, &offset);
@@ -342,7 +327,7 @@ int luau_load(lua_State* L, const char* chunkname, const char* data, size_t size
             int lastline = 0;
             for (int j = 0; j < intervals; ++j)
             {
-                lastLine += read_int32_t(data, size, &offset);
+                lastline += read_int32_t(data, size, &offset);
                 p->abslineinfo[j] = lastline;
             }
         }
@@ -384,8 +369,8 @@ int luau_load(lua_State* L, const char* chunkname, const char* data, size_t size
     setclvalue(L, L->top, cl);
     incr_top(L);
 
-    luaM_free(L, strings, sizeof(TString*) * stringCount, L->activememcat);
-    luaM_free(L, protos, sizeof(Proto*) * protoCount, L->activememcat);
+    luaM_freearray(L, strings, stringCount, TString*, 0);
+    luaM_freearray(L, protos, protoCount, Proto*, 0);
 
     L->global->GCthreshold = GCthreshold;
 

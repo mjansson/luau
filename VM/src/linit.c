@@ -70,7 +70,6 @@ void luaL_sandboxthread(lua_State* L)
 
 static void* l_alloc(void* ud, void* ptr, size_t osize, size_t nsize)
 {
-    (void)sizeof(L);
     (void)ud;
     (void)osize;
     if (nsize == 0)

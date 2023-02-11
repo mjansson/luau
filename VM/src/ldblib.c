@@ -133,11 +133,11 @@ static int db_traceback(lua_State* L)
             char line[32]; // manual conversion for performance
             char* lineend = line + sizeof(line);
             char* lineptr = lineend;
-            for (unsigned int r = ar.currentline; r > 0; r /= 10)
+            for (unsigned int r = (unsigned int)ar.currentline; r > 0; r /= 10)
                 *--lineptr = '0' + (r % 10);
 
             luaL_addchar(&buf, ':');
-            luaL_addlstring(&buf, lineptr, lineend - lineptr, -1);
+            luaL_addlstring(&buf, lineptr, (size_t)(lineend - lineptr), -1);
         }
 
         if (ar.name)

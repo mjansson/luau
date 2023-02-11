@@ -234,7 +234,7 @@ int luaV_strcmp(const TString* ls, const TString* rs)
 
     // always safe to read one character because even empty strings are nul terminated
     if (*l != *r)
-        return uint8_t(*l) - uint8_t(*r);
+        return (uint8_t)(*l) - (uint8_t)(*r);
 
     size_t ll = ls->len;
     size_t lr = rs->len;

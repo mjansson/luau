@@ -74,7 +74,7 @@
 #define luaC_white(g) cast_to(uint8_t, ((g)->currentwhite) & WHITEBITS)
 
 #define luaC_checkGC(L) \
-    { \
+    do { \
         condhardstacktests(luaD_reallocstack(L, L->stacksize - EXTRA_STACK)); \
         if (L->global->totalbytes >= L->global->GCthreshold) \
         { \
@@ -85,51 +85,47 @@
         { \
             condhardmemtests(luaC_validate(L), 2); \
         } \
-    }
+    } while(0)
 
 #define luaC_barrier(L, p, v) \
-    { \
+    do { \
         if (iscollectable(v) && isblack(obj2gco(p)) && iswhite(gcvalue(v))) \
             luaC_barrierf(L, obj2gco(p), gcvalue(v)); \
-    }
+    } while(0)
 
 #define luaC_barriert(L, t, v) \
-    { \
+    do { \
         if (iscollectable(v) && isblack(obj2gco(t)) && iswhite(gcvalue(v))) \
             luaC_barriertable(L, t, gcvalue(v)); \
-    }
+    } while(0)
 
 #define luaC_barrierfast(L, t) \
-    { \
+    do { \
         if (isblack(obj2gco(t))) \
             luaC_barrierback(L, obj2gco(t), &t->gclist); \
-    }
+    } while(0)
 
 #define luaC_objbarrier(L, p, o) \
-    { \
+    do { \
         if (isblack(obj2gco(p)) && iswhite(obj2gco(o))) \
             luaC_barrierf(L, obj2gco(p), obj2gco(o)); \
-    }
+    } while(0)
 
 #define luaC_threadbarrier(L) \
-    { \
+    do { \
         if (isblack(obj2gco(L))) \
             luaC_barrierback(L, obj2gco(L), &L->gclist); \
-    }
+    } while(0)
 
 #define luaC_init(L, o, tt_) \
-    { \
+    do { \
         o->marked = luaC_white(L->global); \
         o->tt = tt_; \
         o->memcat = L->activememcat; \
-    }
+    } while(0)
 
 LUAI_FUNC void luaC_freeall(lua_State* L);
-<<<<<<< HEAD
-LUAI_FUNC void luaC_step(lua_State* L, int assist);
-=======
-LUAI_FUNC size_t luaC_step(lua_State* L, bool assist);
->>>>>>> c5089def6e0322883a4b9cc56bf2688f781533eb
+LUAI_FUNC size_t luaC_step(lua_State* L, int assist);
 LUAI_FUNC void luaC_fullgc(lua_State* L);
 LUAI_FUNC void luaC_initobj(lua_State* L, GCObject* o, uint8_t tt);
 LUAI_FUNC void luaC_upvalclosed(lua_State* L, UpVal* uv);

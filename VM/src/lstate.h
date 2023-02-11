@@ -75,62 +75,62 @@ typedef struct CallInfo
 #define f_isLua(ci) (!ci_func(ci)->isC)
 #define isLua(ci) (ttisfunction((ci)->func) && f_isLua(ci))
 
-struct GCStats
+typedef struct GCStats
 {
     // data for proportional-integral controller of heap trigger value
-    int32_t triggerterms[32] = {0};
-    uint32_t triggertermpos = 0;
-    int32_t triggerintegral = 0;
+    int32_t triggerterms[32];
+    uint32_t triggertermpos;
+    int32_t triggerintegral;
 
-    size_t atomicstarttotalsizebytes = 0;
-    size_t endtotalsizebytes = 0;
-    size_t heapgoalsizebytes = 0;
+    size_t atomicstarttotalsizebytes;
+    size_t endtotalsizebytes;
+    size_t heapgoalsizebytes;
 
-    double starttimestamp = 0;
-    double atomicstarttimestamp = 0;
-    double endtimestamp = 0;
-};
+    double starttimestamp;
+    double atomicstarttimestamp;
+    double endtimestamp;
+} GCStats;
 
 #ifdef LUAI_GCMETRICS
 struct GCCycleMetrics
 {
-    size_t starttotalsizebytes = 0;
-    size_t heaptriggersizebytes = 0;
+    size_t starttotalsizebytes;
+    size_t heaptriggersizebytes;
 
-    double pausetime = 0.0; // time from end of the last cycle to the start of a new one
+    double pausetime; // time from end of the last cycle to the start of a new one
 
     double starttimestamp;
     double endtimestamp;
 
-    double marktime = 0.0;
-    double markassisttime = 0.0;
-    double markmaxexplicittime = 0.0;
-    size_t markexplicitsteps = 0;
-    size_t markwork = 0;
+    double marktime;
+    double markassisttime;
+    double markmaxexplicittime;
+    size_t markexplicitsteps;
+    size_t markwork;
 
     double atomicstarttimestamp;
     size_t atomicstarttotalsizebytes;
     double atomictime;
 
     // specific atomic stage parts
-    double atomictimeupval = 0.0;
-    double atomictimeweak = 0.0;
-    double atomictimegray = 0.0;
-    double atomictimeclear = 0.0;
+    double atomictimeupval;
+    double atomictimeweak;
+    double atomictimegray;
+    double atomictimeclear;
 
-    double sweeptime = 0.0;
-    double sweepassisttime = 0.0;
-    double sweepmaxexplicittime = 0.0;
-    size_t sweepexplicitsteps = 0;
-    size_t sweepwork = 0;
+    double sweeptime;
+    double sweepassisttime;
+    double sweepmaxexplicittime;
+    size_t sweepexplicitsteps;
+    size_t sweepwork;
 
     size_t assistwork;
     size_t explicitwork;
 
-    size_t propagatework = 0;
-    size_t propagateagainwork = 0;
+    size_t propagatework;
+    size_t propagateagainwork;
 
-    size_t endtotalsizebytes = 0;
+    size_t endtotalsizebytes;
 };
 
 struct GCMetrics
@@ -235,8 +235,8 @@ struct lua_State
 
     uint8_t activememcat; // memory category that is used for new GC object allocations
 
-    bool isactive;   // thread is currently executing, stack may be mutated without barriers
-    bool singlestep; // call debugstep hook after each instruction
+    int isactive;   // thread is currently executing, stack may be mutated without barriers
+    int singlestep; // call debugstep hook after each instruction
 
 
     StkId top;                                        // first free slot in the stack

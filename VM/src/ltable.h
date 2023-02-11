@@ -15,6 +15,8 @@ _Static_assert(offsetof(LuaNode, val) == 0, "Unexpected Node memory layout, poin
 // reset cache of absent metamethods, cache is updated in luaT_gettm
 #define invalidateTMcache(t) t->tmcache = 0
 
+struct lua_Page;
+
 LUAI_FUNC const TValue* luaH_getnum(Table* t, int key);
 LUAI_FUNC TValue* luaH_setnum(lua_State* L, Table* t, int key);
 LUAI_FUNC const TValue* luaH_getstr(Table* t, TString* key);
