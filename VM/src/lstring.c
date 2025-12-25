@@ -152,7 +152,8 @@ TString* luaS_buffinish(lua_State* L, TString* ts)
 TString* luaS_newlstr(lua_State* L, const char* str, size_t l)
 {
     unsigned int h = luaS_hash(str, l);
-    for (TString* el = L->global->strt.hash[lmod(h, L->global->strt.size)]; el != NULL; el = el->next)
+    unsigned int hmod = lmod(h, L->global->strt.size);
+    for (TString* el = L->global->strt.hash[hmod]; el != NULL; el = el->next)
     {
         if (el->len == l && (memcmp(str, getstr(el), l) == 0))
         {
@@ -168,8 +169,8 @@ TString* luaS_newlstr(lua_State* L, const char* str, size_t l)
 static int unlinkstr(lua_State* L, TString* ts)
 {
     global_State* g = L->global;
-
-    TString** p = &g->strt.hash[lmod(ts->hash, g->strt.size)];
+    unsigned int hmod = lmod(ts->hash, g->strt.size);
+    TString** p = &g->strt.hash[hmod];
     TString* curr;
     while ((curr = *p))
     {

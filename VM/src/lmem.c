@@ -253,10 +253,10 @@ static lua_Page* newpage(lua_State* L, lua_Page** gcopageset, int pageSize, int 
 
 static lua_Page* newclasspage(lua_State* L, lua_Page** freepageset, lua_Page** gcopageset, uint8_t sizeClass, int storeMetadata)
 {
-    int blockSize = kSizeClassConfig.sizeOfClass[sizeClass] + (storeMetadata ? kBlockHeader : 0);
-    int blockCount = (kPageSize - offsetof(lua_Page, data)) / blockSize;
+    size_t blockSize = kSizeClassConfig.sizeOfClass[sizeClass] + (storeMetadata ? kBlockHeader : 0);
+    size_t blockCount = (kPageSize - offsetof(lua_Page, data)) / blockSize;
 
-    lua_Page* page = newpage(L, gcopageset, kPageSize, blockSize, blockCount);
+    lua_Page* page = newpage(L, gcopageset, kPageSize, (int)blockSize, (int)blockCount);
 
     // prepend a page to page freelist (which is empty because we only ever allocate a new page when it is!)
     LUAU_ASSERT(!freepageset[sizeClass]);

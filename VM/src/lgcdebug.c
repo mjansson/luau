@@ -21,6 +21,11 @@
 #pragma clang diagnostic ignored "-Wpedantic"
 #endif
 
+#ifdef _MSC_VER
+#pragma warning(disable : 4100)
+#pragma warning(disable : 4098)
+#endif
+
 static void validateobjref(global_State* g, GCObject* f, GCObject* t)
 {
     LUAU_ASSERT(!isdead(g, t));
@@ -183,7 +188,7 @@ static void validateobj(global_State* g, GCObject* o)
         break;
 
     default:
-        LUAU_ASSERT("unexpected object type" == 0);
+        LUAU_ASSERT(0 && "unexpected object type");
     }
 }
 
@@ -211,7 +216,7 @@ static void validategraylist(global_State* g, GCObject* o)
             o = gco2p(o)->gclist;
             break;
         default:
-            LUAU_ASSERT("unknown object in gray list" == 0);
+            LUAU_ASSERT(0 && "unknown object in gray list");
             return;
         }
     }

@@ -446,7 +446,7 @@ typedef struct Table
 */
 #define lmod(s, size) (check_exp((size & (size - 1)) == 0, (cast_to(int, (s) & ((size)-1)))))
 
-#define twoto(x) ((int)(1 << (x)))
+#define twoto(x) (1ULL << (uint64_t)(x))
 #define sizenode(t) (twoto((t)->lsizenode))
 
 #define luaO_nilobject (&luaO_nilobject_)

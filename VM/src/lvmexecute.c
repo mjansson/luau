@@ -793,7 +793,7 @@ reentry:
                         break;
 
                     default:
-                        LUAU_ASSERT("Unknown upvalue capture type" == 0);
+                        LUAU_ASSERT(0 && "Unknown upvalue capture type");
                         LUAU_UNREACHABLE(); // improves switch() codegen by eliding opcode bounds checks
                     }
                 }
@@ -1200,7 +1200,7 @@ reentry:
                         break;
 
                     default:
-                        LUAU_ASSERT("Unknown value type" == 0);
+                        LUAU_ASSERT(0 && "Unknown value type");
                         LUAU_UNREACHABLE(); // improves switch() codegen by eliding opcode bounds checks
                     }
 
@@ -1314,7 +1314,7 @@ reentry:
                         break;
 
                     default:
-                        LUAU_ASSERT("Unknown value type" == 0);
+                        LUAU_ASSERT(0 && "Unknown value type");
                         LUAU_UNREACHABLE(); // improves switch() codegen by eliding opcode bounds checks
                     }
 
@@ -2360,7 +2360,7 @@ reentry:
 
             VM_CASE(LOP_DEP_FORGLOOP_INEXT)
             {
-                LUAU_ASSERT("Unsupported deprecated opcode" == 0);
+                LUAU_ASSERT(0 && "Unsupported deprecated opcode");
                 LUAU_UNREACHABLE();
             }
 
@@ -2389,7 +2389,7 @@ reentry:
 
             VM_CASE(LOP_DEP_FORGLOOP_NEXT)
             {
-                LUAU_ASSERT("Unsupported deprecated opcode" == 0);
+                LUAU_ASSERT(0 && "Unsupported deprecated opcode");
                 LUAU_UNREACHABLE();
             }
 
@@ -2609,13 +2609,13 @@ reentry:
 
             VM_CASE(LOP_DEP_JUMPIFEQK)
             {
-                LUAU_ASSERT("Unsupported deprecated opcode" == 0);
+                LUAU_ASSERT(0 && "Unsupported deprecated opcode");
                 LUAU_UNREACHABLE();
             }
 
             VM_CASE(LOP_DEP_JUMPIFNOTEQK)
             {
-                LUAU_ASSERT("Unsupported deprecated opcode" == 0);
+                LUAU_ASSERT(0 && "Unsupported deprecated opcode");
                 LUAU_UNREACHABLE();
             }
 
@@ -2805,7 +2805,7 @@ reentry:
                 uint32_t aux = *pc;
                 StkId ra = VM_REG(LUAU_INSN_A(insn));
 
-                pc += (int)(ttisboolean(ra) && bvalue(ra) == (int)(aux & 1)) != (aux >> 31) ? LUAU_INSN_D(insn) : 1;
+                pc += (int)(ttisboolean(ra) && bvalue(ra) == (int)(aux & 1)) != (int)((aux >> 31) ? LUAU_INSN_D(insn) : 1);
                 LUAU_ASSERT((unsigned)(pc - cl->l.p->code) < (unsigned)(cl->l.p->sizecode));
                 VM_NEXT();
             }
@@ -2826,7 +2826,7 @@ reentry:
                 else
                     pc += (ttisnumber(ra) && nvalue(ra) == nvalue(kv)) ? LUAU_INSN_D(insn) : 1;
 #else
-                pc += (int)(ttisnumber(ra) && nvalue(ra) == nvalue(kv)) != (aux >> 31) ? LUAU_INSN_D(insn) : 1;
+                pc += (int)(ttisnumber(ra) && nvalue(ra) == nvalue(kv)) != (int)((aux >> 31) ? LUAU_INSN_D(insn) : 1);
 #endif
                 LUAU_ASSERT((unsigned)(pc - cl->l.p->code) < (unsigned)(cl->l.p->sizecode));
                 VM_NEXT();
@@ -2840,7 +2840,7 @@ reentry:
                 TValue* kv = VM_KV(aux & 0xffffff);
                 LUAU_ASSERT(ttisstring(kv));
 
-                pc += (int)(ttisstring(ra) && gcvalue(ra) == gcvalue(kv)) != (aux >> 31) ? LUAU_INSN_D(insn) : 1;
+                pc += (int)(ttisstring(ra) && gcvalue(ra) == gcvalue(kv)) != (int)((aux >> 31) ? LUAU_INSN_D(insn) : 1);
                 LUAU_ASSERT((unsigned)(pc - cl->l.p->code) < (unsigned)(cl->l.p->sizecode));
                 VM_NEXT();
             }

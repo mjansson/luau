@@ -1372,8 +1372,9 @@ static void packint(luaL_Buffer* b, unsigned long long n, int islittle, int size
     }
     if (neg && size > SZINT)
     {                                  // negative number need sign extension?
+        char mc = MC;
         for (i = SZINT; i < size; i++) // correct extra bytes
-            buff[islittle ? i : size - 1 - i] = (char)MC;
+            buff[islittle ? i : size - 1 - i] = mc;
     }
     luaL_addlstring(b, buff, size, -1); // add result to buffer
 }

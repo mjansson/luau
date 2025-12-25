@@ -241,7 +241,7 @@ static char* printunsignedrev(char* end, uint64_t num)
 
     if (rest)
     {
-        end[-1] = '0' + (int)(rest);
+        end[-1] = '0' + (char)(rest);
         end -= 1;
     }
 
@@ -257,7 +257,7 @@ static char* printexp(char* buf, int num)
 
     if (v >= 100)
     {
-        *buf++ = '0' + (v / 100);
+        *buf++ = '0' + (char)(v / 100);
         v %= 100;
     }
 
